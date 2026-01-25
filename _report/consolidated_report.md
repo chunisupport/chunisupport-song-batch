@@ -59,14 +59,6 @@
 
 ## 2. パフォーマンス (Performance)
 
-### PERF-001: ループ内でのテンプレート解析によるパフォーマンス劣化 (Severity: Critical)
-
-**内容**: `internal/service/natua_consolidator.go`, `internal/workspace/songchart/workspace.go` の `bulkUpdateSongBPMs`, `bulkUpdateMySQLCharts`, `bulkUpdateMySQLWorldsendCharts` などの関数において、レコードを処理するループ（またはチャンク処理のループ）の内部で `template.New(...).Parse(...)` が呼び出されています。
-
-**リスク**: テンプレート解析は高コストな処理であり、これを繰り返すことで CPU リソースを浪費し、処理速度が劇的に低下します。データ件数が多い場合（数万件など）、チャンクごとにテンプレート解析が発生します。
-
-**推奨対策**: テンプレート変数をパッケージレベルの `var` (init関数で初期化) または構造体のフィールドとして保持し、初期化時に一度だけ `Parse` を行い、実行時は `Execute` のみを行うように修正してください。
-
 ### PERF-002: `io.ReadAll` と `json.Compact` によるメモリ圧迫 (Severity: High)
 
 **内容**: `internal/infra/datasource/downloader.go` の `downloadDatasource` メソッドにおいて、HTTPレスポンスボディを `io.ReadAll` で全てメモリに読み込んだ後、さらに `json.Compact` で別のバッファにコピーしています。
@@ -170,7 +162,6 @@
 | SEC-003 | セキュリティ | Medium | 巨大ファイルによる DoS |
 | SEC-004 | セキュリティ | High | ID生成における衝突耐性・予測困難性の不足 |
 | SEC-005 | セキュリティ | High | 動的SQL構築におけるインジェクションリスク |
-| PERF-001 | パフォーマンス | Critical | ループ内でのテンプレート解析 |
 | PERF-002 | パフォーマンス | High | `io.ReadAll` と `json.Compact` によるメモリ圧迫 |
 | PERF-003 | パフォーマンス | Medium | `SELECT *` の使用 |
 | PERF-004 | パフォーマンス | Medium | MySQL全件読み込み |

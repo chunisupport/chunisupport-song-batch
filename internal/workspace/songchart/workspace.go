@@ -447,16 +447,8 @@ type chartUpdateRecord struct {
 	Notes         sql.NullInt64
 }
 
-func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []chartUpdateRecord, chunkSize int) error {
-	if len(records) == 0 {
-		return nil
-	}
-
-	if chunkSize <= 0 {
-		chunkSize = len(records)
-	}
-
-	const tpl = `
+// bulkUpdateMySQLCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
+var bulkUpdateChartsTpl = template.Must(template.New("bulkUpdateCharts").Parse(`
 UPDATE charts
 SET
 	const = CASE
@@ -478,7 +470,16 @@ SET
 		ELSE notes
 	END
 WHERE (song_id, difficulty_id) IN ({{ .Placeholders }})
-`
+`))
+
+func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []chartUpdateRecord, chunkSize int) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	if chunkSize <= 0 {
+		chunkSize = len(records)
+	}
 
 	for start := 0; start < len(records); start += chunkSize {
 		end := min(start+chunkSize, len(records))
@@ -492,8 +493,7 @@ WHERE (song_id, difficulty_id) IN ({{ .Placeholders }})
 			"Records":      chunk,
 			"Placeholders": placeholders,
 		}
-		err := template.Must(template.New("").Parse(tpl)).Execute(&buf, tplData)
-		if err != nil {
+		if err := bulkUpdateChartsTpl.Execute(&buf, tplData); err != nil {
 			return fmt.Errorf("failed to render bulk update charts template (%d-%d): %w", start, end, err)
 		}
 
@@ -526,16 +526,8 @@ type worldsendChartUpdateRecord struct {
 	Notes   sql.NullInt64
 }
 
-func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []worldsendChartUpdateRecord, chunkSize int) error {
-	if len(records) == 0 {
-		return nil
-	}
-
-	if chunkSize <= 0 {
-		chunkSize = len(records)
-	}
-
-	const tpl = `
+// bulkUpdateMySQLWorldsendCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
+var bulkUpdateWorldsendChartsTpl = template.Must(template.New("bulkUpdateWorldsendCharts").Parse(`
 UPDATE worldsend_charts
 SET
 	we_star = CASE
@@ -557,7 +549,16 @@ SET
 		ELSE notes
 	END
 WHERE song_id IN ({{ .Placeholders }})
-`
+`))
+
+func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []worldsendChartUpdateRecord, chunkSize int) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	if chunkSize <= 0 {
+		chunkSize = len(records)
+	}
 
 	for start := 0; start < len(records); start += chunkSize {
 		end := min(start+chunkSize, len(records))
@@ -571,8 +572,7 @@ WHERE song_id IN ({{ .Placeholders }})
 			"Records":      chunk,
 			"Placeholders": placeholders,
 		}
-		err := template.Must(template.New("").Parse(tpl)).Execute(&buf, tplData)
-		if err != nil {
+		if err := bulkUpdateWorldsendChartsTpl.Execute(&buf, tplData); err != nil {
 			return fmt.Errorf("failed to render bulk update worldsend_charts template (%d-%d): %w", start, end, err)
 		}
 

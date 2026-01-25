@@ -25,6 +25,45 @@ type chartNotesRecord struct {
 	Notes        int `db:"notes"`
 }
 
+// bulkUpdateSongBPMs 用のテンプレート（パフォーマンスのため事前にパースしておく）
+// 差分検知: 既存の BPM を 0 や null で上書きしないようにする
+var bulkUpdateSongBpmsTpl = template.Must(template.New("bulkUpdateSongBPMs").Parse(`
+UPDATE songs SET bpm = CASE id
+	{{- range .}}
+	WHEN {{.ID}} THEN {{.BPM}}
+	{{- end}}
+END
+WHERE id IN (
+	{{- range $i, $e := .}}
+	{{- if $i}},{{end}}{{.ID}}
+	{{- end -}}
+) AND (bpm IS NULL OR bpm = 0)
+`))
+
+// bulkUpdateChartNotes 用のテンプレート（パフォーマンスのため事前にパースしておく）
+// SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使う
+// 差分検知: 既存の notes を 0 や null で上書きしないようにする
+var bulkUpdateChartNotesTpl = template.Must(template.New("bulkUpdateChartNotes").Parse(`
+UPDATE charts SET notes = CASE
+	{{- range .}}
+	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
+	{{- end}}
+	ELSE notes
+END
+WHERE EXISTS (
+	SELECT 1 FROM (
+		{{- range $i, $e := .}}
+		{{- if $i}} UNION ALL{{end}}
+		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
+		{{- end}}
+	) AS t
+	WHERE charts.song_id = t.song_id 
+	  AND charts.difficulty_id = t.difficulty_id
+	  AND (charts.notes IS NULL OR charts.notes = 0)
+	  AND t.new_notes > 0
+)
+`))
+
 // NatuaConsolidator は NATUA データの補完を担当します。
 type NatuaConsolidator struct {
 	workspace *songchart.SongChartWorkspace
@@ -82,28 +121,8 @@ func (c *NatuaConsolidator) bulkUpdateSongBPMs(ctx context.Context, officialMap 
 		return nil
 	}
 
-	// バルクUPDATE (BPM)
-	// 差分検知: 既存の BPM を 0 や null で上書きしないようにする
-	query := `
-UPDATE songs SET bpm = CASE id
-	{{- range .}}
-	WHEN {{.ID}} THEN {{.BPM}}
-	{{- end}}
-END
-WHERE id IN (
-	{{- range $i, $e := .}}
-	{{- if $i}},{{end}}{{.ID}}
-	{{- end -}}
-) AND (bpm IS NULL OR bpm = 0)
-`
-
-	tmpl, err := template.New("bulkUpdateSongBPMs").Parse(query)
-	if err != nil {
-		return fmt.Errorf("failed to parse bulk update song bpms template: %w", err)
-	}
-
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, records); err != nil {
+	if err := bulkUpdateSongBpmsTpl.Execute(&buf, records); err != nil {
 		return fmt.Errorf("failed to execute bulk update song bpms template: %w", err)
 	}
 
@@ -173,37 +192,8 @@ func (c *NatuaConsolidator) bulkUpdateChartNotes(ctx context.Context, officialMa
 }
 
 func (c *NatuaConsolidator) executeBulkUpdateChartNotes(ctx context.Context, records []chartNotesRecord) (int64, error) {
-	// バルクUPDATE (Notes)
-	// SQLiteでは `UPDATE ... FROM` 構文が使えないため、`CASE` を使う
-	// 差分検知: 既存の notes を 0 や null で上書きしないようにする
-	query := `
-UPDATE charts SET notes = CASE
-	{{- range .}}
-	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
-	{{- end}}
-	ELSE notes
-END
-WHERE EXISTS (
-	SELECT 1 FROM (
-		{{- range $i, $e := .}}
-		{{- if $i}} UNION ALL{{end}}
-		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
-		{{- end}}
-	) AS t
-	WHERE charts.song_id = t.song_id 
-	  AND charts.difficulty_id = t.difficulty_id
-	  AND (charts.notes IS NULL OR charts.notes = 0)
-	  AND t.new_notes > 0
-)
-`
-
-	tmpl, err := template.New("bulkUpdateChartNotes").Parse(query)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse bulk update chart notes template: %w", err)
-	}
-
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, records); err != nil {
+	if err := bulkUpdateChartNotesTpl.Execute(&buf, records); err != nil {
 		return 0, fmt.Errorf("failed to execute bulk update chart notes template: %w", err)
 	}
 
