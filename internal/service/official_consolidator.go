@@ -6,11 +6,14 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 
+	"chunisupport-song-batch/internal/domain/difficulty"
+	"chunisupport-song-batch/internal/domain/entity"
 	domainrepo "chunisupport-song-batch/internal/domain/repository"
+	vo "chunisupport-song-batch/internal/domain/valueobject"
 	"chunisupport-song-batch/internal/importer"
+	"chunisupport-song-batch/internal/infra/models"
 	"chunisupport-song-batch/internal/util"
 	"chunisupport-song-batch/internal/workspace/songchart"
 
@@ -22,27 +25,9 @@ type difficultyInfo struct {
 	Name string
 }
 
-type songRecordForUpsert struct {
-	DisplayID   string `db:"display_id"`
-	Title       string `db:"title"`
-	Artist      string `db:"artist"`
-	GenreID     int    `db:"genre_id"`
-	OfficialIdx string `db:"official_idx"`
-	Jacket      any    `db:"jacket"`
-	IsWorldsEnd int    `db:"is_worldsend"`
-}
-
-type chartRecordForUpsert struct {
-	SongID         int     `db:"song_id"`
-	DifficultyID   int     `db:"difficulty_id"`
-	Const          float64 `db:"const"`
-	IsConstUnknown int     `db:"is_const_unknown"`
-}
-
-type worldsendChartRecordForUpsert struct {
-	SongID  int     `db:"song_id"`
-	WeStar  *int    `db:"we_star"`
-	WeKanji *string `db:"we_kanji"`
+// diffIDToDomainDifficultyID はDBのdifficultyIDをドメインのdifficulty.IDに変換します
+func diffIDToDomainDifficultyID(id int) difficulty.ID {
+	return difficulty.ID(id)
 }
 
 // OfficialConsolidator は公式データソースの統合を処理します。
@@ -135,42 +120,37 @@ func (c *OfficialConsolidator) Consolidate(ctx context.Context) error {
 	return nil
 }
 
-func (c *OfficialConsolidator) prepareSongsForUpsert() ([]songRecordForUpsert, map[string]struct{}) {
-	var songsToUpsert []songRecordForUpsert
+func (c *OfficialConsolidator) prepareSongsForUpsert() ([]*models.SongModelForUpsert, map[string]struct{}) {
+	var songsToUpsert []*models.SongModelForUpsert
 	seenOfficialIdx := make(map[string]struct{})
 
-	for _, song := range *c.data {
-		officialID := strings.TrimSpace(song.ID)
+	for _, officialSong := range *c.data {
+		officialID := strings.TrimSpace(officialSong.ID)
 		if officialID == "" {
-			slog.Warn("Skipping official song without official_idx", "title", song.Title, "artist", song.Artist)
+			slog.Warn("Skipping official song without official_idx", "title", officialSong.Title, "artist", officialSong.Artist)
 			continue
 		}
 
-		genreID := c.lookupGenreID(song.Catname)
+		genreID := c.lookupGenreID(officialSong.Catname)
 		if genreID == 0 {
-			slog.Warn("Skipping official song with unknown genre", "title", song.Title, "catname", song.Catname)
+			slog.Warn("Skipping official song with unknown genre", "title", officialSong.Title, "catname", officialSong.Catname)
 			continue
 		}
 
-		isWorldsEnd := strings.TrimSpace(song.WeKanji) != "" || strings.TrimSpace(song.WeStar) != ""
-		image := normalizeImage(strings.TrimSpace(song.Image))
-		displayID := GenerateDisplayID()
+		// ドメインエンティティを使用してSongを生成
+		song, err := entity.NewSongFromOfficial(&officialSong, genreID)
+		if err != nil {
+			slog.Warn("Skipping invalid official song", "title", officialSong.Title, "error", err)
+			continue
+		}
 
-		songsToUpsert = append(songsToUpsert, songRecordForUpsert{
-			DisplayID:   displayID,
-			Title:       strings.TrimSpace(song.Title),
-			Artist:      strings.TrimSpace(song.Artist),
-			GenreID:     genreID,
-			OfficialIdx: officialID,
-			Jacket:      nullIfEmpty(image),
-			IsWorldsEnd: util.BoolToInt(isWorldsEnd),
-		})
+		songsToUpsert = append(songsToUpsert, models.FromSongEntityForUpsert(song))
 		seenOfficialIdx[officialID] = struct{}{}
 	}
 	return songsToUpsert, seenOfficialIdx
 }
 
-func (c *OfficialConsolidator) bulkUpsertSongs(ctx context.Context, songs []songRecordForUpsert) error {
+func (c *OfficialConsolidator) bulkUpsertSongs(ctx context.Context, songs []*models.SongModelForUpsert) error {
 	query := `
 INSERT INTO songs (
 	display_id, title, artist, genre_id, official_idx, jacket, is_worldsend, is_deleted
@@ -343,8 +323,8 @@ func (c *OfficialConsolidator) detectMassiveIdxChange(ctx context.Context, exist
 	return nil
 }
 
-func (c *OfficialConsolidator) prepareChartsForUpsert(songIDs map[string]int) []chartRecordForUpsert {
-	var chartsToUpsert []chartRecordForUpsert
+func (c *OfficialConsolidator) prepareChartsForUpsert(songIDs map[string]int) []*models.ChartModelForUpsert {
+	var chartsToUpsert []*models.ChartModelForUpsert
 
 	levelByDifficultyKey := map[string]func(s *importer.OfficialSong) string{
 		"BASIC":    func(s *importer.OfficialSong) string { return s.LevBas },
@@ -361,14 +341,14 @@ func (c *OfficialConsolidator) prepareChartsForUpsert(songIDs map[string]int) []
 			continue
 		}
 
-		isWorldsEnd := strings.TrimSpace(song.WeKanji) != "" || strings.TrimSpace(song.WeStar) != ""
-		if isWorldsEnd {
+		// ドメインエンティティを使用してWORLD'S END判定
+		if entity.DetermineIsWorldsEnd(&song) {
 			continue
 		}
 
 		for diffName, getLevel := range levelByDifficultyKey {
-			level := strings.TrimSpace(getLevel(&song))
-			if level == "" {
+			levelStr := strings.TrimSpace(getLevel(&song))
+			if levelStr == "" {
 				continue
 			}
 
@@ -378,24 +358,22 @@ func (c *OfficialConsolidator) prepareChartsForUpsert(songIDs map[string]int) []
 				continue
 			}
 
-			constValue, err := parseOfficialLevel(level)
+			// 値オブジェクトを使用してレベルをパース
+			level, err := vo.ParseLevel(levelStr)
 			if err != nil {
-				slog.Warn("Failed to parse official level", "level", level, "difficulty", diffName, "error", err)
+				slog.Warn("Failed to parse official level", "level", levelStr, "difficulty", diffName, "error", err)
 				continue
 			}
 
-			chartsToUpsert = append(chartsToUpsert, chartRecordForUpsert{
-				SongID:         songID,
-				DifficultyID:   diffID,
-				Const:          constValue,
-				IsConstUnknown: util.BoolToInt(constValue >= 10.0),
-			})
+			// ドメインエンティティを作成してモデルに変換
+			chart := entity.NewChart(songID, diffIDToDomainDifficultyID(diffID), level, level.IsConstUnknown())
+			chartsToUpsert = append(chartsToUpsert, models.FromChartEntityForUpsert(chart))
 		}
 	}
 	return chartsToUpsert
 }
 
-func (c *OfficialConsolidator) bulkUpsertCharts(ctx context.Context, charts []chartRecordForUpsert) error {
+func (c *OfficialConsolidator) bulkUpsertCharts(ctx context.Context, charts []*models.ChartModelForUpsert) error {
 	query := `
 INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown)
 VALUES (:song_id, :difficulty_id, :const, :is_const_unknown)
@@ -410,8 +388,8 @@ ON CONFLICT(song_id, difficulty_id) DO UPDATE SET
 	return nil
 }
 
-func (c *OfficialConsolidator) prepareWorldsendChartsForUpsert(songIDs map[string]int) []worldsendChartRecordForUpsert {
-	var chartsToUpsert []worldsendChartRecordForUpsert
+func (c *OfficialConsolidator) prepareWorldsendChartsForUpsert(songIDs map[string]int) []*models.WorldsEndChartModelForUpsert {
+	var chartsToUpsert []*models.WorldsEndChartModelForUpsert
 
 	for _, song := range *c.data {
 		officialID := strings.TrimSpace(song.ID)
@@ -420,51 +398,31 @@ func (c *OfficialConsolidator) prepareWorldsendChartsForUpsert(songIDs map[strin
 			continue
 		}
 
-		isWorldsEnd := strings.TrimSpace(song.WeKanji) != "" || strings.TrimSpace(song.WeStar) != ""
-		if !isWorldsEnd {
+		// ドメインエンティティを使用してWORLD'S END判定
+		if !entity.DetermineIsWorldsEnd(&song) {
 			continue
 		}
 
-		weKanji := strings.TrimSpace(song.WeKanji)
-		weStar := strings.TrimSpace(song.WeStar)
-		var weStarInt *int
-		if weStar != "" {
-			starValue, err := strconv.Atoi(weStar)
-			if err != nil {
-				slog.Warn("Failed to parse we_star as integer", "we_star", weStar, "song", song.Title, "error", err)
-			} else {
-				mappedStar := mapWeStarToActualCount(starValue)
-				if mappedStar == 0 {
-					slog.Warn("Invalid we_star value", "we_star", starValue, "song", song.Title, "expected", "1, 3, 5, 7, or 9")
-				} else {
-					weStarInt = &mappedStar
-				}
-			}
+		// 値オブジェクトを使用してWE星数とWE漢字を処理
+		weStar, err := vo.ParseWeStarFromOfficial(song.WeStar)
+		if err != nil {
+			slog.Warn("Failed to parse we_star", "we_star", song.WeStar, "song", song.Title, "error", err)
 		}
 
-		var weKanjiStr *string
-		if weKanji != "" {
-			runes := []rune(weKanji)
-			if len(runes) > 1 {
-				slog.Warn("we_kanji longer than 1 character, truncating", "we_kanji", weKanji, "song", song.Title)
-				truncated := string(runes[:1])
-				weKanjiStr = &truncated
-			} else {
-				weKanjiStr = &weKanji
-			}
+		weKanji := vo.NewWeKanji(song.WeKanji)
+		if !weKanji.IsEmpty() && len([]rune(song.WeKanji)) > 1 {
+			slog.Warn("we_kanji longer than 1 character, truncating", "we_kanji", song.WeKanji, "song", song.Title)
 		}
 
-		chartsToUpsert = append(chartsToUpsert, worldsendChartRecordForUpsert{
-			SongID:  songID,
-			WeStar:  weStarInt,
-			WeKanji: weKanjiStr,
-		})
+		// ドメインエンティティを作成してモデルに変換
+		weChart := entity.NewWorldsEndChart(songID, weStar, weKanji)
+		chartsToUpsert = append(chartsToUpsert, models.FromWorldsEndChartEntityForUpsert(weChart))
 	}
 
 	return chartsToUpsert
 }
 
-func (c *OfficialConsolidator) bulkUpsertWorldsendCharts(ctx context.Context, charts []worldsendChartRecordForUpsert) error {
+func (c *OfficialConsolidator) bulkUpsertWorldsendCharts(ctx context.Context, charts []*models.WorldsEndChartModelForUpsert) error {
 	query := `
 INSERT INTO worldsend_charts (song_id, we_star, we_kanji)
 VALUES (:song_id, :we_star, :we_kanji)
@@ -487,21 +445,7 @@ func (c *OfficialConsolidator) lookupGenreID(catname string) int {
 	return c.genreIDByKey[key]
 }
 
-func parseOfficialLevel(level string) (float64, error) {
-	level = strings.ReplaceAll(level, "+", ".5")
-	return strconv.ParseFloat(level, 64)
-}
-
-func normalizeImage(image string) string {
-	if image == "" {
-		return ""
-	}
-	if dotIndex := strings.LastIndex(image, "."); dotIndex != -1 {
-		return image[:dotIndex]
-	}
-	return image
-}
-
+// nullIfEmpty は空文字列の場合にnilを返します（DB挿入用）
 func nullIfEmpty(value string) any {
 	if strings.TrimSpace(value) == "" {
 		return nil
@@ -556,25 +500,6 @@ func defaultDifficultyMap() map[string]int {
 		"EXPERT":   3,
 		"MASTER":   4,
 		"ULTIMA":   5,
-	}
-}
-
-// mapWeStarToActualCount は公式データの星表記を実際の星の数に変換します
-// 1→1個, 3→2個, 5→3個, 7→4個, 9→5個
-func mapWeStarToActualCount(officialValue int) int {
-	switch officialValue {
-	case 1:
-		return 1
-	case 3:
-		return 2
-	case 5:
-		return 3
-	case 7:
-		return 4
-	case 9:
-		return 5
-	default:
-		return 0 // 不正な値
 	}
 }
 

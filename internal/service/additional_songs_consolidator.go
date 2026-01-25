@@ -7,8 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"chunisupport-song-batch/internal/domain/entity"
 	domainrepo "chunisupport-song-batch/internal/domain/repository"
+	vo "chunisupport-song-batch/internal/domain/valueobject"
 	"chunisupport-song-batch/internal/importer"
+	"chunisupport-song-batch/internal/infra/models"
 	"chunisupport-song-batch/internal/util"
 	"chunisupport-song-batch/internal/workspace/songchart"
 
@@ -277,29 +280,25 @@ func (c *AdditionalSongsConsolidator) prepareSongsForUpsert(existingIdxs map[str
 			continue
 		}
 
-		image := normalizeImage(strings.TrimSpace(song.Img))
-		displayID := GenerateDisplayID()
-
-		// リリース日をパース（YYYY-MM-DD形式に正規化）
-		var releaseDate *string
-		if song.Release != "" {
-			if normalizedDate, err := normalizeReleaseDate(song.Release); err == nil {
-				releaseDate = &normalizedDate
-			} else {
-				slog.Warn("Failed to parse release date", "release", song.Release, "title", song.Title, "error", err)
-			}
+		// ドメインエンティティを使用してSongを生成
+		songEntity, err := entity.NewSongFromAdditional(&song, genreID)
+		if err != nil {
+			slog.Warn("Skipping invalid additional song", "title", song.Title, "error", err)
+			continue
 		}
 
+		// インフラモデルに変換
+		songModel := models.FromSongEntityForUpsert(songEntity)
 		songsToUpsert = append(songsToUpsert, additionalSongRecordForUpsert{
-			DisplayID:   displayID,
-			Title:       strings.TrimSpace(song.Title),
-			Artist:      strings.TrimSpace(song.Artist),
-			GenreID:     genreID,
-			BPM:         song.BPM,
-			ReleasedAt:  releaseDate,
-			OfficialIdx: officialID,
-			Jacket:      nullIfEmpty(image),
-			IsWorldsEnd: 0, // 追加楽曲はWorld's Endではない
+			DisplayID:   songModel.DisplayID,
+			Title:       songModel.Title,
+			Artist:      songModel.Artist,
+			GenreID:     songModel.GenreID,
+			BPM:         songModel.BPM,
+			ReleasedAt:  songModel.ReleasedAt,
+			OfficialIdx: songModel.OfficialIdx,
+			Jacket:      songModel.Jacket,
+			IsWorldsEnd: songModel.IsWorldsEnd,
 		})
 		seenOfficialIdx[officialID] = struct{}{}
 	}
@@ -576,28 +575,30 @@ func (c *AdditionalSongsConsolidator) prepareWESongsForUpsert(existingIdxs map[s
 			continue
 		}
 
-		image := normalizeImage(strings.TrimSpace(weChart.Img))
-		displayID := GenerateDisplayID()
+		// ドメインの値オブジェクトを使用
+		displayID, err := vo.NewDisplayID()
+		if err != nil {
+			slog.Warn("Failed to generate display ID for WORLD'S END song", "title", weChart.Title, "error", err)
+			continue
+		}
 
-		// リリース日をパース（YYYY-MM-DD形式に正規化）
-		var releaseDate *string
-		if weChart.Release != "" {
-			if normalizedDate, err := normalizeReleaseDate(weChart.Release); err == nil {
-				releaseDate = &normalizedDate
-			} else {
-				slog.Warn("Failed to parse release date for WORLD'S END song", "release", weChart.Release, "title", weChart.Title, "error", err)
-			}
+		jacket := vo.NewJacketImage(weChart.Img)
+
+		// リリース日をパース（値オブジェクトを使用）
+		releasedAt, err := vo.ParseReleaseDate(weChart.Release)
+		if err != nil && weChart.Release != "" {
+			slog.Warn("Failed to parse release date for WORLD'S END song", "release", weChart.Release, "title", weChart.Title, "error", err)
 		}
 
 		songsToUpsert = append(songsToUpsert, additionalSongRecordForUpsert{
-			DisplayID:   displayID,
+			DisplayID:   displayID.String(),
 			Title:       strings.TrimSpace(weChart.Title),
 			Artist:      strings.TrimSpace(weChart.Artist),
 			GenreID:     genreID,
 			BPM:         nil, // WORLD'S ENDはBPM情報なし
-			ReleasedAt:  releaseDate,
+			ReleasedAt:  releasedAt.StringPtr(),
 			OfficialIdx: officialID,
-			Jacket:      nullIfEmpty(image),
+			Jacket:      jacket.NullableString(),
 			IsWorldsEnd: 1, // WORLD'S ENDフラグ
 		})
 		seenOfficialIdx[officialID] = struct{}{}
