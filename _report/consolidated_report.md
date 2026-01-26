@@ -103,14 +103,6 @@
 
 ## 5. 保守性 (Maintainability)
 
-### MAINT-001: DRY原則違反 (重複コード) (Severity: Medium)
-
-**内容**: `internal/workspace/songchart/workspace.go`, `internal/service/*_consolidator.go` において、バルク処理のためのSQL構築ロジックや、データソースごとの類似した処理（データのロード、マップ化）がコピペで増殖しています。
-
-**リスク**: 修正漏れの原因となり、同じバグが複数箇所に存在する可能性が高まります。
-
-**推奨対策**: ジェネリクス (`any` や型パラメータ) を活用した共通ユーティリティ関数を作成するか、共通の親構造体（埋め込み）を利用してロジックを共有化してください。
-
 ### MAINT-002: 命名規則の不統一とマジックストリング (Severity: Low)
 
 **内容**: `internal/info/info.go`, `main.go` 他において、定数名において `Name` (CamelCase) と `ENV_OFFICIAL_URL` (Screaming Snake Case) が混在しています。また、ファイルパス（`.datasources`）や難易度IDなどがコード中にハードコードされています。
@@ -142,6 +134,5 @@
 | REL-001 | 信頼性 | Medium | `mainframe` パーサーのサイレントなデータ欠損 |
 | REL-002 | 信頼性 | Medium | 部分的なダウンロード失敗の許容 |
 | ARCH-001 | アーキテクチャ | High | OCP違反による拡張性の欠如 |
-| MAINT-001 | 保守性 | Medium | DRY原則違反 |
 | MAINT-002 | 保守性 | Low | 命名規則の不統一 |
 | MAINT-003 | 保守性 | Low | `panic` を前提としたエラーハンドリング |
