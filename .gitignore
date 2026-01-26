@@ -63,3 +63,6 @@ chunisupport-song-batch-*
 # 個人用メモ
 MEMO.md
 schema_dump.sql
+
+# Serena一旦無視
+.serena/

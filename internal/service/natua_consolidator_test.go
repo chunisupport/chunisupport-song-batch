@@ -610,9 +610,9 @@ func TestNatuaConsolidator_Consolidate_SkipsNodata(t *testing.T) {
 	}
 }
 
-// TestNatuaConsolidator_BuildOfficialIndexMap は official_idx マップが正しく構築されることを確認
-// 注: buildOfficialIndexMap は is_deleted をフィルタしない（全ての楽曲を返す）
-func TestNatuaConsolidator_BuildOfficialIndexMap(t *testing.T) {
+// TestBuildOfficialIndexMap は official_idx マップが正しく構築されることを確認
+// 注: BuildOfficialIndexMap は is_deleted をフィルタしない（全ての楽曲を返す）
+func TestBuildOfficialIndexMap(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -636,11 +636,9 @@ func TestNatuaConsolidator_BuildOfficialIndexMap(t *testing.T) {
 		t.Fatalf("failed to insert test songs: %v", err)
 	}
 
-	consolidator := NewNatuaConsolidator(ws, nil)
-
-	idxMap, err := consolidator.buildOfficialIndexMap(ctx)
+	idxMap, err := BuildOfficialIndexMap(ctx, ws.DB())
 	if err != nil {
-		t.Fatalf("buildOfficialIndexMap returned error: %v", err)
+		t.Fatalf("BuildOfficialIndexMap returned error: %v", err)
 	}
 
 	// 検証: official_idx が NOT NULL のすべての楽曲がマップに含まれる（is_deleted は考慮しない）

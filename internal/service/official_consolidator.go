@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
-	"slices"
 	"strings"
 
 	"chunisupport-song-batch/internal/domain/difficulty"
@@ -93,7 +91,7 @@ func (c *OfficialConsolidator) Consolidate(ctx context.Context) error {
 	slog.Info("Bulk upserted songs", "count", len(songsToUpsert))
 
 	// Step 2: UPSERTした楽曲のIDを取得
-	songIDs, err := c.fetchSongIDsByOfficialIdx(ctx, seenOfficialIdx)
+	songIDs, err := FetchSongIDsByOfficialIdx(ctx, c.workspace.DB(), seenOfficialIdx)
 	if err != nil {
 		return err
 	}
@@ -131,7 +129,7 @@ func (c *OfficialConsolidator) prepareSongsForUpsert() ([]*models.SongModelForUp
 			continue
 		}
 
-		genreID := c.lookupGenreID(officialSong.Catname)
+		genreID := LookupGenreID(c.genreIDByKey, officialSong.Catname)
 		if genreID == 0 {
 			slog.Warn("Skipping official song with unknown genre", "title", officialSong.Title, "catname", officialSong.Catname)
 			continue
@@ -170,35 +168,6 @@ ON CONFLICT(official_idx) DO UPDATE SET
 		return fmt.Errorf("failed to bulk upsert songs: %w", err)
 	}
 	return nil
-}
-
-func (c *OfficialConsolidator) fetchSongIDsByOfficialIdx(ctx context.Context, officialIdxs map[string]struct{}) (map[string]int, error) {
-	if len(officialIdxs) == 0 {
-		return make(map[string]int), nil
-	}
-
-	idxList := slices.Collect(maps.Keys(officialIdxs))
-
-	query, args, err := sqlx.In(`SELECT id, official_idx FROM songs WHERE official_idx IN (?)`, idxList)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build query for fetching song IDs: %w", err)
-	}
-
-	type songIDRecord struct {
-		ID          int    `db:"id"`
-		OfficialIdx string `db:"official_idx"`
-	}
-
-	var records []songIDRecord
-	if err := c.workspace.DB().SelectContext(ctx, &records, query, args...); err != nil {
-		return nil, fmt.Errorf("failed to fetch song IDs by official_idx: %w", err)
-	}
-
-	result := make(map[string]int, len(records))
-	for _, r := range records {
-		result[r.OfficialIdx] = r.ID
-	}
-	return result, nil
 }
 
 // detectMassiveIdxChange は official_idx の大規模変更を検知します。
@@ -435,14 +404,6 @@ ON CONFLICT(song_id) DO UPDATE SET
 		return fmt.Errorf("failed to bulk upsert worldsend charts: %w", err)
 	}
 	return nil
-}
-
-func (c *OfficialConsolidator) lookupGenreID(catname string) int {
-	if len(c.genreIDByKey) == 0 {
-		return 0
-	}
-	key := strings.TrimSpace(strings.ToUpper(catname))
-	return c.genreIDByKey[key]
 }
 
 // nullIfEmpty は空文字列の場合にnilを返します（DB挿入用）

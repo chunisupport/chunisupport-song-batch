@@ -85,7 +85,7 @@ func (c *NatuaConsolidator) Consolidate(ctx context.Context) error {
 		return nil
 	}
 
-	officialMap, err := c.buildOfficialIndexMap(ctx)
+	officialMap, err := BuildOfficialIndexMap(ctx, c.workspace.DB())
 	if err != nil {
 		return err
 	}
@@ -204,20 +204,4 @@ func (c *NatuaConsolidator) executeBulkUpdateChartNotes(ctx context.Context, rec
 
 	affected, _ := result.RowsAffected()
 	return affected, nil
-}
-
-func (c *NatuaConsolidator) buildOfficialIndexMap(ctx context.Context) (map[string]int, error) {
-	var rows []struct {
-		ID          int    `db:"id"`
-		OfficialIdx string `db:"official_idx"`
-	}
-	if err := c.workspace.DB().SelectContext(ctx, &rows, `SELECT id, official_idx FROM songs WHERE official_idx IS NOT NULL`); err != nil {
-		return nil, fmt.Errorf("failed to build workspace official_idx map: %w", err)
-	}
-
-	result := make(map[string]int, len(rows))
-	for _, row := range rows {
-		result[row.OfficialIdx] = row.ID
-	}
-	return result, nil
 }

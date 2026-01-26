@@ -130,7 +130,7 @@ func (c *AdditionalSongsConsolidator) consolidateSongs(ctx context.Context, exis
 	slog.Info("Bulk upserted additional songs", "count", len(songsToUpsert))
 
 	// Step 2: UPSERTした楽曲のIDを取得
-	songIDs, err := c.fetchSongIDsByOfficialIdx(ctx, seenOfficialIdx)
+	songIDs, err := FetchSongIDsByOfficialIdx(ctx, c.workspace.DB(), seenOfficialIdx)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func (c *AdditionalSongsConsolidator) consolidateCharts(ctx context.Context, exi
 	}
 
 	// 楽曲IDを取得
-	songIDs, err := c.fetchSongIDsByOfficialIdx(ctx, chartOfficialIdxs)
+	songIDs, err := FetchSongIDsByOfficialIdx(ctx, c.workspace.DB(), chartOfficialIdxs)
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func (c *AdditionalSongsConsolidator) prepareSongsForUpsert(existingIdxs map[str
 			continue
 		}
 
-		genreID := c.lookupGenreID(song.Genre)
+		genreID := LookupGenreID(c.genreIDByKey, song.Genre)
 		if genreID == 0 {
 			slog.Warn("Skipping additional song with unknown genre", "title", song.Title, "genre", song.Genre)
 			continue
@@ -332,38 +332,6 @@ ON CONFLICT(official_idx) DO UPDATE SET
 		return fmt.Errorf("failed to bulk upsert additional songs: %w", err)
 	}
 	return nil
-}
-
-func (c *AdditionalSongsConsolidator) fetchSongIDsByOfficialIdx(ctx context.Context, officialIdxs map[string]struct{}) (map[string]int, error) {
-	if len(officialIdxs) == 0 {
-		return make(map[string]int), nil
-	}
-
-	idxList := make([]string, 0, len(officialIdxs))
-	for idx := range officialIdxs {
-		idxList = append(idxList, idx)
-	}
-
-	query, args, err := sqlx.In(`SELECT id, official_idx FROM songs WHERE official_idx IN (?)`, idxList)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build query for fetching song IDs: %w", err)
-	}
-
-	type songIDRecord struct {
-		ID          int    `db:"id"`
-		OfficialIdx string `db:"official_idx"`
-	}
-
-	var records []songIDRecord
-	if err := c.workspace.DB().SelectContext(ctx, &records, query, args...); err != nil {
-		return nil, fmt.Errorf("failed to fetch song IDs by official_idx: %w", err)
-	}
-
-	result := make(map[string]int, len(records))
-	for _, r := range records {
-		result[r.OfficialIdx] = r.ID
-	}
-	return result, nil
 }
 
 // prepareChartsFromSongsForUpsert は追加楽曲(songs)のチャート情報を準備します
@@ -510,14 +478,6 @@ ON CONFLICT(song_id, difficulty_id) DO UPDATE SET
 	return nil
 }
 
-func (c *AdditionalSongsConsolidator) lookupGenreID(genre string) int {
-	if len(c.genreIDByKey) == 0 {
-		return 0
-	}
-	key := strings.TrimSpace(strings.ToUpper(genre))
-	return c.genreIDByKey[key]
-}
-
 // consolidateWECharts はWORLD'S END譜面をワークスペースに反映します
 func (c *AdditionalSongsConsolidator) consolidateWECharts(ctx context.Context, existingIdxs map[string]struct{}) error {
 	// WORLD'S END楽曲を準備してUPSERT
@@ -533,7 +493,7 @@ func (c *AdditionalSongsConsolidator) consolidateWECharts(ctx context.Context, e
 	slog.Info("Bulk upserted WORLD'S END songs", "count", len(weRecords))
 
 	// UPSERTした楽曲のIDを取得
-	songIDs, err := c.fetchSongIDsByOfficialIdx(ctx, seenOfficialIdx)
+	songIDs, err := FetchSongIDsByOfficialIdx(ctx, c.workspace.DB(), seenOfficialIdx)
 	if err != nil {
 		return err
 	}
@@ -569,7 +529,7 @@ func (c *AdditionalSongsConsolidator) prepareWESongsForUpsert(existingIdxs map[s
 			continue
 		}
 
-		genreID := c.lookupGenreID(weChart.Genre)
+		genreID := LookupGenreID(c.genreIDByKey, weChart.Genre)
 		if genreID == 0 {
 			slog.Warn("Skipping WORLD'S END song with unknown genre", "title", weChart.Title, "genre", weChart.Genre)
 			continue
