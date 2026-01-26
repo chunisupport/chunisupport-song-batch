@@ -15,7 +15,6 @@ import (
 	"chunisupport-song-batch/internal/info"
 	"chunisupport-song-batch/internal/infra/datasource"
 	"chunisupport-song-batch/internal/infra/db"
-	"chunisupport-song-batch/internal/infra/logger"
 	"chunisupport-song-batch/internal/infra/repository"
 	"chunisupport-song-batch/internal/service"
 
@@ -27,23 +26,32 @@ import (
 // ロガー、設定、データベース接続を初期化し、
 // 次にデータインポートバッチプロセスを実行します。
 func main() {
-	logger := slog.New(logger.NewCustomHandler())
-	slog.SetDefault(logger)
-
-	slog.Info("Data Import Batch Started - " + info.Name + " v" + info.Version)
-
+	// .envファイルを先に読み込んでAPP_ENVを取得
 	if err := godotenv.Load(); err != nil {
-		slog.Warn("Failed to load .env file; falling back to existing environment variables", "error", err)
-	} else {
-		slog.Info("Loaded environment variables from .env")
+		// .envが読み込めない場合は既存の環境変数を使用
 	}
-
-	flags := config.NewBatchFlags()
 
 	env := os.Getenv("APP_ENV")
 	if env == "" {
 		env = "develop"
 	}
+
+	// APP_ENVに基づいてログレベルを設定
+	logLevel := slog.LevelDebug
+	if env == "production" {
+		logLevel = slog.LevelInfo
+	}
+
+	// 標準のTextHandlerを使用してロガーを初期化
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+	})
+	slog.SetDefault(slog.New(handler))
+
+	slog.Info("Data Import Batch Started - " + info.Name + " v" + info.Version)
+	slog.Info("Loaded environment variables", "env", env, "log_level", logLevel.String())
+
+	flags := config.NewBatchFlags()
 
 	cfg, err := config.LoadConfig(env)
 	if err != nil {
