@@ -13,8 +13,7 @@ import (
 
 // ConsolidationOptions は統合処理の挙動を制御します。
 type ConsolidationOptions struct {
-	MajorUpdate       bool
-	WorkspaceDumpPath string
+	MajorUpdate bool
 }
 
 // ConsolidationSources は統合に利用するソースデータを保持します。
@@ -147,14 +146,6 @@ func (s *ConsolidationService) buildWorkspace(ctx context.Context, datasources [
 			_ = workspace.Close()
 			return nil, err
 		}
-	}
-
-	if s.opts.WorkspaceDumpPath != "" {
-		if err := workspace.DumpTo(ctx, s.opts.WorkspaceDumpPath); err != nil {
-			_ = workspace.Close()
-			return nil, fmt.Errorf("failed to dump workspace: %w", err)
-		}
-		slog.Info("Workspace dumped", "path", s.opts.WorkspaceDumpPath)
 	}
 
 	return workspace, nil

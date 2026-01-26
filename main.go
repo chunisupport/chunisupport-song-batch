@@ -229,8 +229,7 @@ func consolidateToFinalTables(ctx context.Context, db *sqlx.DB, cfg config.Confi
 	genreRepo := repository.NewGenreRepository(db)
 
 	opts := service.ConsolidationOptions{
-		MajorUpdate:       flags.MajorUpdate,
-		WorkspaceDumpPath: flags.WorkspaceDumpPath,
+		MajorUpdate: flags.MajorUpdate,
 	}
 	consolidationService := service.NewConsolidationService(db, difficultyRepo, genreRepo, cfg.PwPepper, cfg.Datasources, opts, sources)
 

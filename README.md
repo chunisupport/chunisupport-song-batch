@@ -93,7 +93,7 @@ mainframe のデータソースでは API キーとシート ID をもとに Goo
 
 ## 実行方法
 ```bash
-go run . --skip-download=false --workspace-dump=""
+go run . --skip-download=false
 ```
 主なフラグは次のとおりです。
 
@@ -101,7 +101,6 @@ go run . --skip-download=false --workspace-dump=""
 | --- | --- |
 | `--skip-download` | true の場合、ダウンロードをスキップして既存 JSON を使用します |
 | `--major-update` | 大型アップデート用のモード。公式データと追加楽曲のみを使用し、定数更新ルールを適用します |
-| `--workspace-dump=<path>` | 統合後の SQLite ワークスペースをファイルにダンプします |
 
 ## テスト
 ユニットテストは次のコマンドで実行できます。

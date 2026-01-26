@@ -7,8 +7,6 @@ import (
 	_ "embed"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -80,55 +78,6 @@ func (w *SongChartWorkspace) Close() error {
 // DB は内部の *sqlx.DB を返します。
 func (w *SongChartWorkspace) DB() *sqlx.DB {
 	return w.db
-}
-
-// DumpTo は VACUUM INTO で SQLite ファイルを出力します。
-func (w *SongChartWorkspace) DumpTo(ctx context.Context, path string) error {
-	if path == "" {
-		return nil
-	}
-
-	dir := filepath.Dir(path)
-	if dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("failed to prepare workspace dump dir: %w", err)
-		}
-	}
-
-	// 既存のファイルがあれば削除
-	if _, err := os.Stat(path); err == nil {
-		slog.Info("Removing existing dump file", "path", path)
-		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("failed to remove existing dump file: %w", err)
-		}
-	}
-
-	conn, err := w.db.Conn(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get a connection for dumping workspace: %w", err)
-	}
-	defer conn.Close()
-
-	if _, err := conn.ExecContext(ctx, "ATTACH DATABASE ? AS dump", path); err != nil {
-		return fmt.Errorf("failed to attach dump database: %w", err)
-	}
-	defer func() {
-		if _, err := conn.ExecContext(ctx, "DETACH DATABASE dump"); err != nil {
-			slog.Warn("Failed to detach dump database", "error", err)
-		}
-	}()
-
-	if _, err := conn.ExecContext(ctx, "CREATE TABLE dump.songs AS SELECT * FROM main.songs"); err != nil {
-		return fmt.Errorf("failed to dump songs table: %w", err)
-	}
-	if _, err := conn.ExecContext(ctx, "CREATE TABLE dump.charts AS SELECT * FROM main.charts"); err != nil {
-		return fmt.Errorf("failed to dump charts table: %w", err)
-	}
-	if _, err := conn.ExecContext(ctx, "CREATE TABLE dump.worldsend_charts AS SELECT * FROM main.worldsend_charts"); err != nil {
-		return fmt.Errorf("failed to dump worldsend_charts table: %w", err)
-	}
-
-	return nil
 }
 
 func (w *SongChartWorkspace) bootstrapSchema(ctx context.Context) error {

@@ -15,14 +15,6 @@
 
 ## 1. セキュリティ (Security)
 
-### SEC-001: `--workspace-dump` による任意ファイルの上書き・削除 (Severity: High)
-
-**内容**: `config.NewBatchFlags` で受け取った `workspace-dump` パスが `SongChartWorkspace.DumpTo` にそのまま渡され、`os.Remove` が実行された後、`ATTACH DATABASE` で書き込まれます。
-
-**リスク**: 攻撃者（または設定ミスをした運用者）がシステム上の重要ファイル（例: `/etc/hosts`, アプリケーションバイナリ）のパスを指定すると、バッチ実行権限でそれらのファイルが削除・破壊されます。特にコンテナ環境で root 実行されている場合、システム全体への影響があります。
-
-**推奨対策**: 出力先ディレクトリをアプリケーション指定のサンドボックス（例: `.workspace_dumps/`）内に固定し、ファイル名のみを指定可能にするか、パスのバリデーション（ディレクトリトラバーサル対策含む）を厳格に行うべきです。
-
 ### SEC-002: SSRF (Server-Side Request Forgery) のリスク (Severity: Medium)
 
 **内容**: `internal/infra/datasource/downloader.go` の `downloadDatasource` メソッドは、設定ファイル (`.config/*.settings.json` や環境変数) から供給される URL に対して HTTP GET リクエストを行います。
@@ -141,7 +133,6 @@
 
 | ID | カテゴリ | 優先度 | 概要 |
 |----|----------|--------|------|
-| SEC-001 | セキュリティ | High | `--workspace-dump` による任意ファイルの上書き・削除 |
 | SEC-002 | セキュリティ | Medium | SSRF のリスク |
 | SEC-003 | セキュリティ | Medium | 巨大ファイルによる DoS |
 | SEC-005 | セキュリティ | High | 動的SQL構築におけるインジェクションリスク |
