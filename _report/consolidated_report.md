@@ -71,14 +71,6 @@
 
 ## 3. 信頼性 (Reliability)
 
-### REL-001: `mainframe` パーサーのサイレントなデータ欠損 (Severity: Medium)
-
-**内容**: `internal/infra/datasource/mainframe_downloader.go` の `parseSheetData` において、`strconv.ParseFloat` がエラーを返した場合、エラーログを出力せずに `continue` しています。
-
-**リスク**: データソース（Google Spreadsheet）のフォーマットが微妙に変更された場合（例: 数値セルに "13.5 (仮)" のような注釈が入る）、その譜面データは警告なく静かに無視されます。これにより、データの整合性が失われていることに気づくのが遅れる可能性があります。
-
-**推奨対策**: パースエラー発生時は少なくとも `slog.Warn` でログ出力を行い、どの行・どのデータがスキップされたかを運用者が把握できるようにすべきです。
-
 ### REL-002: 部分的なダウンロード失敗の許容とデータ不整合 (Severity: Medium)
 
 **内容**: `main.go` の `executeDataImportBatch` では、`downloadDatasources` がエラーを返しても「一部のデータソースで続行」します。しかし、`Downloader.DownloadAll` は「全てのダウンロードが失敗した場合」のみエラーを返す仕様にはなっていません（実装上は `successCount == 0 && len(downloadErrors) > 0` の判定）。
