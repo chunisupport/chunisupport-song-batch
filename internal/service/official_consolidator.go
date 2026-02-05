@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"strings"
 
-	"chunisupport-song-batch/internal/domain/difficulty"
-	"chunisupport-song-batch/internal/domain/entity"
-	domainrepo "chunisupport-song-batch/internal/domain/repository"
-	vo "chunisupport-song-batch/internal/domain/valueobject"
-	"chunisupport-song-batch/internal/importer"
-	"chunisupport-song-batch/internal/infra/models"
-	"chunisupport-song-batch/internal/util"
-	"chunisupport-song-batch/internal/workspace/songchart"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
+	"github.com/chunisupport/chunisupport-song-batch/internal/infra/models"
+	"github.com/chunisupport/chunisupport-song-batch/internal/util"
+	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 
 	"github.com/jmoiron/sqlx"
 )

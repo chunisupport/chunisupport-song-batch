@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	domainrepo "chunisupport-song-batch/internal/domain/repository"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 
 	"github.com/jmoiron/sqlx"
 )

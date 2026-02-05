@@ -3,10 +3,10 @@ package models_test
 import (
 	"testing"
 
-	"chunisupport-song-batch/internal/domain/difficulty"
-	"chunisupport-song-batch/internal/domain/entity"
-	vo "chunisupport-song-batch/internal/domain/valueobject"
-	"chunisupport-song-batch/internal/infra/models"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/infra/models"
 )
 
 func TestFromChartEntity(t *testing.T) {

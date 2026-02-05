@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	domainrepo "chunisupport-song-batch/internal/domain/repository"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 )
 
 // difficultyRepositoryImpl は DifficultyRepository のインフラ層実装です。

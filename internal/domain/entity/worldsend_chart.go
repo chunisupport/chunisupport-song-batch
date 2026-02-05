@@ -1,7 +1,7 @@
 package entity
 
 import (
-	vo "chunisupport-song-batch/internal/domain/valueobject"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
 )
 
 // WorldsEndChart はWORLD'S END譜面を表すドメインエンティティ

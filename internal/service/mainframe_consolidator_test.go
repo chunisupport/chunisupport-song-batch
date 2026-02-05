@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"chunisupport-song-batch/internal/domain/difficulty"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
 )
 
 // TestNormalizer は normalizer 関数のエッジケースを確認

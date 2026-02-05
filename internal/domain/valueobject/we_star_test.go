@@ -3,7 +3,7 @@ package valueobject_test
 import (
 	"testing"
 
-	"chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
 )
 
 func TestParseWeStarFromOfficial(t *testing.T) {

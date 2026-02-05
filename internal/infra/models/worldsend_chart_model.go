@@ -1,8 +1,8 @@
 package models
 
 import (
-	"chunisupport-song-batch/internal/domain/entity"
-	vo "chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
 )
 
 // WorldsEndChartModel はDB永続化用のWORLD'S END譜面構造体

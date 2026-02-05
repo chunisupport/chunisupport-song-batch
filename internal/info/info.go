@@ -2,7 +2,7 @@ package info
 
 const (
 	// Name はアプリケーション名です。
-	Name = "chunisupport-song-batch"
+	Name = "github.com/chunisupport/chunisupport-song-batch"
 	// Version はアプリケーションのバージョンです。
 	Version = "0.0.1"
 	// ConfigDir は設定ファイルのディレクトリです。

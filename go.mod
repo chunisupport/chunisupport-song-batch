@@ -1,4 +1,4 @@
-module chunisupport-song-batch
+module github.com/chunisupport/chunisupport-song-batch
 
 go 1.25.5
 

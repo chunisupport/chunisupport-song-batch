@@ -3,8 +3,8 @@ package entity_test
 import (
 	"testing"
 
-	"chunisupport-song-batch/internal/domain/entity"
-	"chunisupport-song-batch/internal/importer"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 )
 
 func TestNewSongFromOfficial(t *testing.T) {

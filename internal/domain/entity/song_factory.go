@@ -3,8 +3,8 @@ package entity
 import (
 	"strings"
 
-	vo "chunisupport-song-batch/internal/domain/valueobject"
-	"chunisupport-song-batch/internal/importer"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 )
 
 // NewSongFromOfficial は公式データからSongエンティティを生成します

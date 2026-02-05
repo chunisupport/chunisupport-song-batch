@@ -1,8 +1,8 @@
 package entity
 
 import (
-	"chunisupport-song-batch/internal/domain/difficulty"
-	vo "chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
 )
 
 // Chart は譜面を表すドメインエンティティ

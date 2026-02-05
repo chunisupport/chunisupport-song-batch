@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	"chunisupport-song-batch/internal/config"
-	domainrepo "chunisupport-song-batch/internal/domain/repository"
-	"chunisupport-song-batch/internal/importer"
-	"chunisupport-song-batch/internal/workspace/songchart"
+	"github.com/chunisupport/chunisupport-song-batch/internal/config"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
+	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
 // ConsolidationOptions は統合処理の挙動を制御します。

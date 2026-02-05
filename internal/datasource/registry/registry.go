@@ -3,7 +3,7 @@ package registry
 import (
 	"fmt"
 
-	infra "chunisupport-song-batch/internal/infra/datasource"
+	infra "github.com/chunisupport/chunisupport-song-batch/internal/infra/datasource"
 )
 
 // Definition はデータソースをダウンロードするために必要なメタデータを保持します。

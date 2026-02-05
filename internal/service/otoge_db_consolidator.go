@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"chunisupport-song-batch/internal/importer"
-	"chunisupport-song-batch/internal/workspace/songchart"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
+	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
 // OtogeDbConsolidator は otoge-db 由来のリリース日を補完します。

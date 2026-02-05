@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"chunisupport-song-batch/internal/info"
+	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 )
 
 // init registers available datasource providers.

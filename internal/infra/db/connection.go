@@ -3,7 +3,7 @@ package db
 import (
 	"fmt"
 
-	"chunisupport-song-batch/internal/config"
+	"github.com/chunisupport/chunisupport-song-batch/internal/config"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"

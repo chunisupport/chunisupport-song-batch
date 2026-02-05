@@ -10,9 +10,9 @@ import (
 	"strings"
 	"text/template"
 
-	domainrepo "chunisupport-song-batch/internal/domain/repository"
-	"chunisupport-song-batch/internal/info"
-	"chunisupport-song-batch/internal/util"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
+	"github.com/chunisupport/chunisupport-song-batch/internal/info"
+	"github.com/chunisupport/chunisupport-song-batch/internal/util"
 
 	"github.com/jmoiron/sqlx"
 

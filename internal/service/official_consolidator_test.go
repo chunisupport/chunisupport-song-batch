@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	domainrepo "chunisupport-song-batch/internal/domain/repository"
-	"chunisupport-song-batch/internal/importer"
-	"chunisupport-song-batch/internal/workspace/songchart"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
+	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"

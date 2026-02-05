@@ -1,9 +1,9 @@
 package models
 
 import (
-	"chunisupport-song-batch/internal/domain/entity"
-	vo "chunisupport-song-batch/internal/domain/valueobject"
-	"chunisupport-song-batch/internal/util"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/util"
 )
 
 // SongModel はDB永続化用の楽曲構造体

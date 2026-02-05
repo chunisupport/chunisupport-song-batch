@@ -3,9 +3,9 @@ package entity_test
 import (
 	"testing"
 
-	"chunisupport-song-batch/internal/domain/difficulty"
-	"chunisupport-song-batch/internal/domain/entity"
-	vo "chunisupport-song-batch/internal/domain/valueobject"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
+	vo "github.com/chunisupport/chunisupport-song-batch/internal/domain/valueobject"
 )
 
 func TestNewChart(t *testing.T) {

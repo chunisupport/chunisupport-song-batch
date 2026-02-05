@@ -8,10 +8,10 @@ import (
 	"strings"
 	"text/template"
 
-	"chunisupport-song-batch/internal/domain/difficulty"
-	"chunisupport-song-batch/internal/importer"
-	"chunisupport-song-batch/internal/info"
-	"chunisupport-song-batch/internal/workspace/songchart"
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
+	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
+	"github.com/chunisupport/chunisupport-song-batch/internal/info"
+	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
 type songBPMRecord struct {

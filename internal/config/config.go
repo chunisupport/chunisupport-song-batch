@@ -6,7 +6,7 @@ import (
 	"errors"
 	"os"
 
-	"chunisupport-song-batch/internal/info"
+	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 )
 
 // Auth は認証関連の設定を定義します。
