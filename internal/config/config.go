@@ -4,7 +4,10 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 )
@@ -40,6 +43,38 @@ type Database struct {
 	DbConfig DbConfig `json:"db_config"`
 }
 
+func loadDbConfigFromEnv() (DbConfig, error) {
+	var config DbConfig
+	var missing []string
+
+	get := func(key string) string {
+		value, ok := os.LookupEnv(key)
+		if !ok || value == "" {
+			missing = append(missing, key)
+			return ""
+		}
+		return value
+	}
+
+	config.DbName = get("DB_NAME")
+	config.DbHost = get("DB_HOST")
+	portStr := get("DB_PORT")
+	config.DbUser = get("DB_USER")
+	config.DbPass = get("DB_PASS")
+
+	if len(missing) > 0 {
+		return config, fmt.Errorf("missing required DB environment variables: %s", strings.Join(missing, ", "))
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return config, fmt.Errorf("invalid DB_PORT: %w", err)
+	}
+	config.DbPort = port
+
+	return config, nil
+}
+
 // DatasourceEntry はバッチインポート用のデータソースを定義します。
 type DatasourceEntry struct {
 	Name   string `json:"name"`
@@ -67,6 +102,12 @@ func LoadConfig(env string) (Config, error) {
 	if config.PwPepper == "" {
 		return config, errors.New("missing PW_PEPPER environment variable")
 	}
+
+	dbConfig, err := loadDbConfigFromEnv()
+	if err != nil {
+		return config, err
+	}
+	config.Database.DbConfig = dbConfig
 
 	return config, nil
 }

@@ -54,15 +54,6 @@ FLUSH PRIVILEGES;
     "jwt_expiration_hour": 24,
     "session_expiration_hour": 24
   },
-  "database": {
-    "db_config": {
-      "DB_NAME": "chunisupport",
-      "DB_HOST": "127.0.0.1",
-      "DB_PORT": 3306,
-      "DB_USER": "chunisupport",
-      "DB_PASS": "chunisupport"
-    }
-  },
   "datasources": [
     { "name": "official", "active": true },
     { "name": "natua", "active": true },
@@ -72,6 +63,7 @@ FLUSH PRIVILEGES;
 }
 ```
 `APP_ENV` を指定すると `<env>.settings.json` が読み込まれます。未指定時は `develop` が利用されます。
+DB 接続情報は `.env` の `DB_*` で指定します。
 
 ### 4. 環境変数の設定
 `.env` またはシェル環境に以下の環境変数を設定します。mainframe 用の値が不要な場合、省略可能です。
@@ -80,6 +72,11 @@ FLUSH PRIVILEGES;
 | --- | --- |
 | `APP_ENV` | 読み込む設定ファイル（例: `develop`） |
 | `PW_PEPPER` | 公式楽曲の `display_id` 生成に利用するペッパー値 |
+| `DB_NAME` | MySQL データベース名 |
+| `DB_HOST` | MySQL ホスト名 |
+| `DB_PORT` | MySQL ポート番号 |
+| `DB_USER` | MySQL ユーザー |
+| `DB_PASS` | MySQL パスワード |
 | `CHUNISUPPORT_BATCH_OFFICIAL_URL` | 公式データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_NATUA_URL` | Natua データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_OTOGE_DB_URL` | otoge-db データソースのダウンロード URL（リリース日補完用） |
