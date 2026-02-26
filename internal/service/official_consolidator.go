@@ -393,11 +393,11 @@ func (c *OfficialConsolidator) prepareWorldsendChartsForUpsert(songIDs map[strin
 
 func (c *OfficialConsolidator) bulkUpsertWorldsendCharts(ctx context.Context, charts []*models.WorldsEndChartModelForUpsert) error {
 	query := `
-INSERT INTO worldsend_charts (song_id, we_star, we_kanji)
-VALUES (:song_id, :we_star, :we_kanji)
+INSERT INTO worldsend_charts (song_id, level_star, attribute)
+VALUES (:song_id, :level_star, :attribute)
 ON CONFLICT(song_id) DO UPDATE SET
-	we_star = excluded.we_star,
-	we_kanji = excluded.we_kanji
+	level_star = excluded.level_star,
+	attribute = excluded.attribute
 `
 	_, err := sqlx.NamedExecContext(ctx, c.workspace.DB(), query, charts)
 	if err != nil {

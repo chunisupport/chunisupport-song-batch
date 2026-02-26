@@ -218,17 +218,17 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		_, exists := mysqlWorldsendCharts[mysqlSongID]
 		if !exists {
 			worldsendChartsToInsert = append(worldsendChartsToInsert, worldsendChartInsertRecord{
-				SongID:  mysqlSongID,
-				WeStar:  weChart.WeStar,
-				WeKanji: weChart.WeKanji,
-				Notes:   weChart.Notes,
+				SongID:    mysqlSongID,
+				LevelStar: weChart.LevelStar,
+				Attribute: weChart.Attribute,
+				Notes:     weChart.Notes,
 			})
 		} else {
 			worldsendChartsToUpdate = append(worldsendChartsToUpdate, worldsendChartUpdateRecord{
-				SongID:  mysqlSongID,
-				WeStar:  weChart.WeStar,
-				WeKanji: weChart.WeKanji,
-				Notes:   weChart.Notes,
+				SongID:    mysqlSongID,
+				LevelStar: weChart.LevelStar,
+				Attribute: weChart.Attribute,
+				Notes:     weChart.Notes,
 			})
 		}
 	}
@@ -271,11 +271,11 @@ type workspaceChart struct {
 }
 
 type workspaceWorldsendChart struct {
-	ID      int            `db:"id"`
-	SongID  int            `db:"song_id"`
-	WeStar  sql.NullInt64  `db:"we_star"`
-	WeKanji sql.NullString `db:"we_kanji"`
-	Notes   sql.NullInt64  `db:"notes"`
+	ID        int            `db:"id"`
+	SongID    int            `db:"song_id"`
+	LevelStar sql.NullInt64  `db:"level_star"`
+	Attribute sql.NullString `db:"attribute"`
+	Notes     sql.NullInt64  `db:"notes"`
 }
 
 type mysqlSong struct {
@@ -292,10 +292,10 @@ type mysqlChart struct {
 }
 
 type mysqlWorldsendChart struct {
-	SongID  int
-	WeStar  sql.NullInt64
-	WeKanji sql.NullString
-	Notes   sql.NullInt64
+	SongID    int
+	LevelStar sql.NullInt64
+	Attribute sql.NullString
+	Notes     sql.NullInt64
 }
 
 func (w *SongChartWorkspace) loadWorkspaceSongs(ctx context.Context) ([]workspaceSong, error) {
@@ -368,7 +368,7 @@ func loadMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor) (map[stri
 }
 
 func loadMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor) (map[int]mysqlWorldsendChart, error) {
-	rows, err := mysql.QueryContext(ctx, `SELECT song_id, we_star, we_kanji, notes FROM worldsend_charts`)
+	rows, err := mysql.QueryContext(ctx, `SELECT song_id, level_star, attribute, notes FROM worldsend_charts`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load mysql worldsend_charts: %w", err)
 	}
@@ -377,7 +377,7 @@ func loadMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor) 
 	result := make(map[int]mysqlWorldsendChart)
 	for rows.Next() {
 		var rec mysqlWorldsendChart
-		if err := rows.Scan(&rec.SongID, &rec.WeStar, &rec.WeKanji, &rec.Notes); err != nil {
+		if err := rows.Scan(&rec.SongID, &rec.LevelStar, &rec.Attribute, &rec.Notes); err != nil {
 			return nil, fmt.Errorf("failed to scan mysql worldsend_chart: %w", err)
 		}
 		result[rec.SongID] = rec
@@ -469,27 +469,27 @@ func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 }
 
 type worldsendChartUpdateRecord struct {
-	SongID  int
-	WeStar  sql.NullInt64
-	WeKanji sql.NullString
-	Notes   sql.NullInt64
+	SongID    int
+	LevelStar sql.NullInt64
+	Attribute sql.NullString
+	Notes     sql.NullInt64
 }
 
 // bulkUpdateMySQLWorldsendCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
 var bulkUpdateWorldsendChartsTpl = template.Must(template.New("bulkUpdateWorldsendCharts").Parse(`
 UPDATE worldsend_charts
 SET
-	we_star = CASE
+	level_star = CASE
 		{{- range .Records }}
 		WHEN song_id = ? THEN ?
 		{{- end }}
-		ELSE we_star
+		ELSE level_star
 	END,
-	we_kanji = CASE
+	attribute = CASE
 		{{- range .Records }}
 		WHEN song_id = ? THEN ?
 		{{- end }}
-		ELSE we_kanji
+		ELSE attribute
 	END,
 	notes = CASE
 		{{- range .Records }}
@@ -526,11 +526,11 @@ func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 		}
 
 		var args []any
-		for _, rec := range chunk { // we_star
-			args = append(args, rec.SongID, nullableInt(rec.WeStar))
+		for _, rec := range chunk { // level_star
+			args = append(args, rec.SongID, nullableInt(rec.LevelStar))
 		}
-		for _, rec := range chunk { // we_kanji
-			args = append(args, rec.SongID, nullableString(rec.WeKanji))
+		for _, rec := range chunk { // attribute
+			args = append(args, rec.SongID, nullableString(rec.Attribute))
 		}
 		for _, rec := range chunk { // notes
 			args = append(args, rec.SongID, nullableInt(rec.Notes))
@@ -790,10 +790,10 @@ func bulkInsertMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 }
 
 type worldsendChartInsertRecord struct {
-	SongID  int
-	WeStar  sql.NullInt64
-	WeKanji sql.NullString
-	Notes   sql.NullInt64
+	SongID    int
+	LevelStar sql.NullInt64
+	Attribute sql.NullString
+	Notes     sql.NullInt64
 }
 
 func bulkInsertMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []worldsendChartInsertRecord, chunkSize int) error {
@@ -805,10 +805,10 @@ func bulkInsertMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 		chunkSize = len(records)
 	}
 
-	const queryPrefix = "INSERT INTO worldsend_charts (song_id, we_star, we_kanji, notes) VALUES "
+	const queryPrefix = "INSERT INTO worldsend_charts (song_id, level_star, attribute, notes) VALUES "
 	const querySuffix = ` ON DUPLICATE KEY UPDATE
-        we_star = VALUES(we_star),
-        we_kanji = VALUES(we_kanji),
+        level_star = VALUES(level_star),
+        attribute = VALUES(attribute),
         notes = COALESCE(VALUES(notes), notes)`
 
 	for start := 0; start < len(records); start += chunkSize {
@@ -821,8 +821,8 @@ func bulkInsertMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 			values[i] = "(?, ?, ?, ?)"
 			args = append(args,
 				rec.SongID,
-				nullableInt(rec.WeStar),
-				nullableString(rec.WeKanji),
+				nullableInt(rec.LevelStar),
+				nullableString(rec.Attribute),
 				nullableInt(rec.Notes),
 			)
 		}

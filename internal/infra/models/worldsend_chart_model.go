@@ -7,32 +7,32 @@ import (
 
 // WorldsEndChartModel はDB永続化用のWORLD'S END譜面構造体
 type WorldsEndChartModel struct {
-	SongID  int     `db:"song_id"`
-	WeStar  *int    `db:"we_star"`
-	WeKanji *string `db:"we_kanji"`
-	Notes   *int    `db:"notes"`
+	SongID    int     `db:"song_id"`
+	LevelStar *int    `db:"level_star"`
+	Attribute *string `db:"attribute"`
+	Notes     *int    `db:"notes"`
 }
 
 // FromWorldsEndChartEntity はWorldsEndChartエンティティからWorldsEndChartModelを生成します
 func FromWorldsEndChartEntity(c *entity.WorldsEndChart) *WorldsEndChartModel {
 	return &WorldsEndChartModel{
-		SongID:  c.SongID(),
-		WeStar:  c.WeStar().IntPtr(),
-		WeKanji: c.WeKanji().StringPtr(),
-		Notes:   c.Notes(),
+		SongID:    c.SongID(),
+		LevelStar: c.WeStar().IntPtr(),
+		Attribute: c.WeKanji().StringPtr(),
+		Notes:     c.Notes(),
 	}
 }
 
 // ToWorldsEndChartEntity はWorldsEndChartModelからWorldsEndChartエンティティを生成します
 func (m *WorldsEndChartModel) ToWorldsEndChartEntity() *entity.WorldsEndChart {
 	var weStar vo.WeStar
-	if m.WeStar != nil {
-		weStar = vo.ReconstructWeStar(*m.WeStar)
+	if m.LevelStar != nil {
+		weStar = vo.ReconstructWeStar(*m.LevelStar)
 	}
 
 	var weKanji vo.WeKanji
-	if m.WeKanji != nil {
-		weKanji = vo.ReconstructWeKanji(*m.WeKanji)
+	if m.Attribute != nil {
+		weKanji = vo.ReconstructWeKanji(*m.Attribute)
 	}
 
 	return entity.ReconstructWorldsEndChart(
@@ -45,16 +45,16 @@ func (m *WorldsEndChartModel) ToWorldsEndChartEntity() *entity.WorldsEndChart {
 
 // WorldsEndChartModelForUpsert はUPSERT操作用のWORLD'S END譜面モデルです
 type WorldsEndChartModelForUpsert struct {
-	SongID  int     `db:"song_id"`
-	WeStar  *int    `db:"we_star"`
-	WeKanji *string `db:"we_kanji"`
+	SongID    int     `db:"song_id"`
+	LevelStar *int    `db:"level_star"`
+	Attribute *string `db:"attribute"`
 }
 
 // FromWorldsEndChartEntityForUpsert はWorldsEndChartエンティティからUPSERT用モデルを生成します
 func FromWorldsEndChartEntityForUpsert(c *entity.WorldsEndChart) *WorldsEndChartModelForUpsert {
 	return &WorldsEndChartModelForUpsert{
-		SongID:  c.SongID(),
-		WeStar:  c.WeStar().IntPtr(),
-		WeKanji: c.WeKanji().StringPtr(),
+		SongID:    c.SongID(),
+		LevelStar: c.WeStar().IntPtr(),
+		Attribute: c.WeKanji().StringPtr(),
 	}
 }

@@ -573,10 +573,10 @@ func (c *AdditionalSongsConsolidator) prepareWESongsForUpsert(existingIdxs map[s
 
 // weChartRecordForUpsert はWORLD'S END譜面のUPSERT用レコードです
 type weChartRecordForUpsert struct {
-	SongID  int     `db:"song_id"`
-	WEStar  *int    `db:"we_star"`
-	WEKanji *string `db:"we_kanji"`
-	Notes   *int    `db:"notes"`
+	SongID    int     `db:"song_id"`
+	LevelStar *int    `db:"level_star"`
+	Attribute *string `db:"attribute"`
+	Notes     *int    `db:"notes"`
 }
 
 // prepareWEChartsForUpsert はWORLD'S END譜面のUPSERT用レコードを準備します
@@ -590,18 +590,18 @@ func (c *AdditionalSongsConsolidator) prepareWEChartsForUpsert(songIDs map[strin
 			continue
 		}
 
-		// we_kanjiをポインタ型に変換
-		var weKanji *string
+		// attributeをポインタ型に変換
+		var attribute *string
 		kanjiStr := strings.TrimSpace(weChart.WEKanji)
 		if kanjiStr != "" {
-			weKanji = &kanjiStr
+			attribute = &kanjiStr
 		}
 
 		chartsToUpsert = append(chartsToUpsert, weChartRecordForUpsert{
-			SongID:  songID,
-			WEStar:  weChart.WEStar,
-			WEKanji: weKanji,
-			Notes:   weChart.Notes,
+			SongID:    songID,
+			LevelStar: weChart.WEStar,
+			Attribute: attribute,
+			Notes:     weChart.Notes,
 		})
 	}
 
@@ -611,11 +611,11 @@ func (c *AdditionalSongsConsolidator) prepareWEChartsForUpsert(songIDs map[strin
 // bulkUpsertWECharts はWORLD'S END譜面を一括でUPSERTします
 func (c *AdditionalSongsConsolidator) bulkUpsertWECharts(ctx context.Context, charts []weChartRecordForUpsert) error {
 	query := `
-INSERT INTO worldsend_charts (song_id, we_star, we_kanji, notes)
-VALUES (:song_id, :we_star, :we_kanji, :notes)
+INSERT INTO worldsend_charts (song_id, level_star, attribute, notes)
+VALUES (:song_id, :level_star, :attribute, :notes)
 ON CONFLICT(song_id) DO UPDATE SET
-	we_star = COALESCE(excluded.we_star, worldsend_charts.we_star),
-	we_kanji = COALESCE(excluded.we_kanji, worldsend_charts.we_kanji),
+	level_star = COALESCE(excluded.level_star, worldsend_charts.level_star),
+	attribute = COALESCE(excluded.attribute, worldsend_charts.attribute),
 	notes = COALESCE(excluded.notes, worldsend_charts.notes)
 `
 	_, err := sqlx.NamedExecContext(ctx, c.workspace.DB(), query, charts)

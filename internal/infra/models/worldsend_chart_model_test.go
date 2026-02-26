@@ -20,11 +20,11 @@ func TestFromWorldsEndChartEntity(t *testing.T) {
 		if model.SongID != 100 {
 			t.Errorf("SongID = %v, want 100", model.SongID)
 		}
-		if model.WeStar == nil || *model.WeStar != 3 {
-			t.Errorf("WeStar = %v, want 3", model.WeStar)
+		if model.LevelStar == nil || *model.LevelStar != 3 {
+			t.Errorf("LevelStar = %v, want 3", model.LevelStar)
 		}
-		if model.WeKanji == nil || *model.WeKanji != "狂" {
-			t.Errorf("WeKanji = %v, want '狂'", model.WeKanji)
+		if model.Attribute == nil || *model.Attribute != "狂" {
+			t.Errorf("Attribute = %v, want '狂'", model.Attribute)
 		}
 		if model.Notes == nil || *model.Notes != 500 {
 			t.Errorf("Notes = %v, want 500", model.Notes)
@@ -38,25 +38,25 @@ func TestFromWorldsEndChartEntity(t *testing.T) {
 
 		model := models.FromWorldsEndChartEntity(chart)
 
-		if model.WeStar != nil {
-			t.Errorf("WeStar = %v, want nil", model.WeStar)
+		if model.LevelStar != nil {
+			t.Errorf("LevelStar = %v, want nil", model.LevelStar)
 		}
-		if model.WeKanji != nil {
-			t.Errorf("WeKanji = %v, want nil", model.WeKanji)
+		if model.Attribute != nil {
+			t.Errorf("Attribute = %v, want nil", model.Attribute)
 		}
 	})
 }
 
 func TestWorldsEndChartModel_ToWorldsEndChartEntity(t *testing.T) {
 	t.Run("正常系: モデルからWorldsEndChartエンティティに変換", func(t *testing.T) {
-		weStar := 4
-		weKanji := "招"
+		levelStar := 4
+		attribute := "招"
 		notes := 800
 		model := &models.WorldsEndChartModel{
-			SongID:  100,
-			WeStar:  &weStar,
-			WeKanji: &weKanji,
-			Notes:   &notes,
+			SongID:    100,
+			LevelStar: &levelStar,
+			Attribute: &attribute,
+			Notes:     &notes,
 		}
 
 		chart := model.ToWorldsEndChartEntity()
@@ -77,10 +77,10 @@ func TestWorldsEndChartModel_ToWorldsEndChartEntity(t *testing.T) {
 
 	t.Run("正常系: nilの場合はゼロ値", func(t *testing.T) {
 		model := &models.WorldsEndChartModel{
-			SongID:  100,
-			WeStar:  nil,
-			WeKanji: nil,
-			Notes:   nil,
+			SongID:    100,
+			LevelStar: nil,
+			Attribute: nil,
+			Notes:     nil,
 		}
 
 		chart := model.ToWorldsEndChartEntity()

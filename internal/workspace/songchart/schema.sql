@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS charts (
 CREATE TABLE IF NOT EXISTS worldsend_charts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     song_id INTEGER NOT NULL UNIQUE,
-    we_star INTEGER CHECK(we_star IS NULL OR we_star BETWEEN 1 AND 5),
-    we_kanji TEXT CHECK(LENGTH(we_kanji) <= 1),
+    level_star INTEGER CHECK(level_star IS NULL OR level_star BETWEEN 1 AND 5),
+    attribute TEXT CHECK(LENGTH(attribute) <= 1),
     notes INTEGER CHECK(notes IS NULL OR notes >= 0),
     FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE
 );
