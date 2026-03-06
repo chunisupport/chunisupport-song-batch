@@ -25,6 +25,8 @@ func (f *ImporterFactory) CreateImporter(dataSourceType DataSourceType) (Importe
 		return NewOtogeDbImporter(), nil
 	case DataSourceAdditionalSongs:
 		return NewAdditionalSongsImporter(), nil
+	case DataSourceSt1027:
+		return NewSt1027Importer(), nil
 	default:
 		return nil, fmt.Errorf("unsupported data source type: %s", dataSourceType)
 	}
@@ -35,6 +37,7 @@ func (f *ImporterFactory) GetSupportedDataSources() []DataSourceType {
 	return []DataSourceType{
 		DataSourceOfficial,
 		DataSourceAdditionalSongs,
+		DataSourceSt1027,
 		DataSourceNatua,
 		DataSourceMainframe,
 		DataSourceOtogeDb,

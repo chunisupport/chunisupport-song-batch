@@ -173,6 +173,12 @@ func importDataByDatasources(datasources []datasource.Datasource) (service.Conso
 			} else {
 				return sources, fmt.Errorf("unexpected data type for natua datasource: %T", result.Data)
 			}
+		case importer.DataSourceSt1027:
+			if data, ok := result.Data.(*importer.St1027Data); ok {
+				sources.St1027 = data
+			} else {
+				return sources, fmt.Errorf("unexpected data type for st1027 datasource: %T", result.Data)
+			}
 		case importer.DataSourceMainframe:
 			if data, ok := result.Data.(*importer.MainframeData); ok {
 				sources.Mainframe = data
