@@ -79,19 +79,7 @@ func (c *St1027Consolidator) Consolidate(ctx context.Context) error {
 }
 func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialMap map[string]int) error {
 	var records []chartNotesRecord
-	for i := range c.data.Songs {
-		song := &c.data.Songs[i]
-		chartsToProcess := []struct {
-			Name  string
-			Chart *importer.St1027Chart
-		}{
-			{"basic", &song.Basic},
-			{"advanced", &song.Advanced},
-			{"expert", &song.Expert},
-			{"master", &song.Master},
-			{"ultima", &song.Ultima},
-		}
-
+	for _, song := range c.data.Songs {
 		officialID := strings.TrimSpace(song.Meta.OfficialID)
 		if officialID == "" {
 			continue
@@ -101,18 +89,26 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 			continue
 		}
 
-		for _, item := range chartsToProcess {
-			diffID := difficulty.ParseName(item.Name).Int()
+		chartsToProcess := map[string]importer.St1027Chart{
+			"basic":    song.Basic,
+			"advanced": song.Advanced,
+			"expert":   song.Expert,
+			"master":   song.Master,
+			"ultima":   song.Ultima,
+		}
+
+		for name, chart := range chartsToProcess {
+			diffID := difficulty.ParseName(name).Int()
 			if diffID == 0 {
 				continue
 			}
-			if item.Chart.NotesAll == nil || *item.Chart.NotesAll <= 0 {
+			if chart.NotesAll == nil || *chart.NotesAll <= 0 {
 				continue
 			}
 			records = append(records, chartNotesRecord{
 				SongID:       songID,
 				DifficultyID: diffID,
-				Notes:        *item.Chart.NotesAll,
+				Notes:        *chart.NotesAll,
 			})
 		}
 	}
