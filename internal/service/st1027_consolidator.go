@@ -1,48 +1,15 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
-	"text/template"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
-
-type chartNotesRecord struct {
-	SongID       int `db:"song_id"`
-	DifficultyID int `db:"difficulty_id"`
-	Notes        int `db:"notes"`
-}
-
-// bulkUpdateChartNotes 用のテンプレート（パフォーマンスのため事前にパースしておく）
-// SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使う
-// 差分検知: 既存の notes を 0 や null で上書きしないようにする
-var bulkUpdateChartNotesTpl = template.Must(template.New("bulkUpdateChartNotes").Parse(`
-UPDATE charts SET notes = CASE
-	{{- range .}}
-	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
-	{{- end}}
-	ELSE notes
-END
-WHERE EXISTS (
-	SELECT 1 FROM (
-		{{- range $i, $e := .}}
-		{{- if $i}} UNION ALL{{end}}
-		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
-		{{- end}}
-	) AS t
-	WHERE charts.song_id = t.song_id
-	  AND charts.difficulty_id = t.difficulty_id
-	  AND (charts.notes IS NULL OR charts.notes = 0)
-	  AND t.new_notes > 0
-)
-`))
 
 // St1027Consolidator は st1027 データからノーツ数を補完します。
 type St1027Consolidator struct {
@@ -78,7 +45,7 @@ func (c *St1027Consolidator) Consolidate(ctx context.Context) error {
 	return nil
 }
 func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialMap map[string]int) error {
-	var records []chartNotesRecord
+	var records []ChartNotesRecord
 	for _, song := range c.data.Songs {
 		officialID := strings.TrimSpace(song.Meta.OfficialID)
 		if officialID == "" {
@@ -105,7 +72,7 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 			if chart.NotesAll == nil || *chart.NotesAll <= 0 {
 				continue
 			}
-			records = append(records, chartNotesRecord{
+			records = append(records, ChartNotesRecord{
 				SongID:       songID,
 				DifficultyID: diffID,
 				Notes:        *chart.NotesAll,
@@ -123,7 +90,7 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
 		batch := records[i:end]
 
-		affected, err := c.executeBulkUpdateChartNotes(ctx, batch)
+		affected, err := ExecuteBulkUpdateChartNotes(ctx, c.workspace.DB(), batch)
 		if err != nil {
 			return err
 		}
@@ -132,19 +99,4 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 
 	slog.Info("St1027 chart notes updated", "count", totalAffected)
 	return nil
-}
-
-func (c *St1027Consolidator) executeBulkUpdateChartNotes(ctx context.Context, records []chartNotesRecord) (int64, error) {
-	var buf bytes.Buffer
-	if err := bulkUpdateChartNotesTpl.Execute(&buf, records); err != nil {
-		return 0, fmt.Errorf("failed to execute bulk update chart notes template: %w", err)
-	}
-
-	result, err := c.workspace.DB().ExecContext(ctx, buf.String())
-	if err != nil {
-		return 0, fmt.Errorf("failed to execute bulk update chart notes: %w", err)
-	}
-
-	affected, _ := result.RowsAffected()
-	return affected, nil
 }

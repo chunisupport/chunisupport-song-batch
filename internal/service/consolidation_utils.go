@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"strings"
+	"text/template"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -12,6 +14,37 @@ import (
 type ConsolidationUtils struct {
 	db *sqlx.DB
 }
+
+// ChartNotesRecord は notes の一括更新に使用される内部レコードです。
+type ChartNotesRecord struct {
+	SongID       int `db:"song_id"`
+	DifficultyID int `db:"difficulty_id"`
+	Notes        int `db:"notes"`
+}
+
+// bulkUpdateChartNotesTpl は notes の一括更新用テンプレートです。
+// SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使います。
+// 差分検知により、既存の notes を 0 や null で上書きしないようにします。
+var bulkUpdateChartNotesTpl = template.Must(template.New("bulkUpdateChartNotes").Parse(`
+UPDATE charts SET notes = CASE
+	{{- range .}}
+	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
+	{{- end}}
+	ELSE notes
+END
+WHERE EXISTS (
+	SELECT 1 FROM (
+		{{- range $i, $e := .}}
+		{{- if $i}} UNION ALL{{end}}
+		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
+		{{- end}}
+	) AS t
+	WHERE charts.song_id = t.song_id
+	  AND charts.difficulty_id = t.difficulty_id
+	  AND (charts.notes IS NULL OR charts.notes = 0)
+	  AND t.new_notes > 0
+)
+`))
 
 // NewConsolidationUtils は集約処理向けのユーティリティを初期化します。
 func NewConsolidationUtils(db *sqlx.DB) *ConsolidationUtils {
@@ -134,4 +167,20 @@ func BuildOfficialIndexMap(ctx context.Context, db sqlx.QueryerContext) (map[str
 		result[row.OfficialIdx] = row.ID
 	}
 	return result, nil
+}
+
+// ExecuteBulkUpdateChartNotes は charts テーブルの notes を1バッチ分まとめて更新します。
+func ExecuteBulkUpdateChartNotes(ctx context.Context, db *sqlx.DB, records []ChartNotesRecord) (int64, error) {
+	var buf bytes.Buffer
+	if err := bulkUpdateChartNotesTpl.Execute(&buf, records); err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update chart notes template: %w", err)
+	}
+
+	result, err := db.ExecContext(ctx, buf.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update chart notes: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	return affected, nil
 }
