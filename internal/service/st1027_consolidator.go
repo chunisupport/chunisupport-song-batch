@@ -10,6 +10,14 @@ import (
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
+const (
+	difficultyBasic    = "basic"
+	difficultyAdvanced = "advanced"
+	difficultyExpert   = "expert"
+	difficultyMaster   = "master"
+	difficultyUltima   = "ultima"
+)
+
 // St1027Consolidator は st1027 データからノーツ数を補完します。
 type St1027Consolidator struct {
 	workspace *songchart.SongChartWorkspace
@@ -56,11 +64,11 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 		}
 
 		chartsToProcess := map[string]importer.St1027Chart{
-			"basic":    song.Basic,
-			"advanced": song.Advanced,
-			"expert":   song.Expert,
-			"master":   song.Master,
-			"ultima":   song.Ultima,
+			difficultyBasic:    song.Basic,
+			difficultyAdvanced: song.Advanced,
+			difficultyExpert:   song.Expert,
+			difficultyMaster:   song.Master,
+			difficultyUltima:   song.Ultima,
 		}
 
 		for name, chart := range chartsToProcess {
