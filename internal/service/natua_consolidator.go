@@ -17,12 +17,6 @@ type songBPMRecord struct {
 	BPM int `db:"bpm"`
 }
 
-type chartNotesRecord struct {
-	SongID       int `db:"song_id"`
-	DifficultyID int `db:"difficulty_id"`
-	Notes        int `db:"notes"`
-}
-
 // bulkUpdateSongBPMs 用のテンプレート（パフォーマンスのため事前にパースしておく）
 // 差分検知: 既存の BPM を 0 や null で上書きしないようにする
 var bulkUpdateSongBpmsTpl = template.Must(template.New("bulkUpdateSongBPMs").Parse(`
@@ -36,30 +30,6 @@ WHERE id IN (
 	{{- if $i}},{{end}}{{.ID}}
 	{{- end -}}
 ) AND (bpm IS NULL OR bpm = 0)
-`))
-
-// bulkUpdateChartNotes 用のテンプレート（パフォーマンスのため事前にパースしておく）
-// SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使う
-// 差分検知: 既存の notes を 0 や null で上書きしないようにする
-var bulkUpdateChartNotesTpl = template.Must(template.New("bulkUpdateChartNotes").Parse(`
-UPDATE charts SET notes = CASE
-	{{- range .}}
-	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
-	{{- end}}
-	ELSE notes
-END
-WHERE EXISTS (
-	SELECT 1 FROM (
-		{{- range $i, $e := .}}
-		{{- if $i}} UNION ALL{{end}}
-		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
-		{{- end}}
-	) AS t
-	WHERE charts.song_id = t.song_id 
-	  AND charts.difficulty_id = t.difficulty_id
-	  AND (charts.notes IS NULL OR charts.notes = 0)
-	  AND t.new_notes > 0
-)
 `))
 
 // NatuaConsolidator は NATUA データの補完を担当します。

@@ -6,12 +6,43 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"text/template"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
+
+type chartNotesRecord struct {
+	SongID       int `db:"song_id"`
+	DifficultyID int `db:"difficulty_id"`
+	Notes        int `db:"notes"`
+}
+
+// bulkUpdateChartNotes 用のテンプレート（パフォーマンスのため事前にパースしておく）
+// SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使う
+// 差分検知: 既存の notes を 0 や null で上書きしないようにする
+var bulkUpdateChartNotesTpl = template.Must(template.New("bulkUpdateChartNotes").Parse(`
+UPDATE charts SET notes = CASE
+	{{- range .}}
+	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
+	{{- end}}
+	ELSE notes
+END
+WHERE EXISTS (
+	SELECT 1 FROM (
+		{{- range $i, $e := .}}
+		{{- if $i}} UNION ALL{{end}}
+		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
+		{{- end}}
+	) AS t
+	WHERE charts.song_id = t.song_id
+	  AND charts.difficulty_id = t.difficulty_id
+	  AND (charts.notes IS NULL OR charts.notes = 0)
+	  AND t.new_notes > 0
+)
+`))
 
 // St1027Consolidator は st1027 データからノーツ数を補完します。
 type St1027Consolidator struct {
