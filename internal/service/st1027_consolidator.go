@@ -46,20 +46,18 @@ func (c *St1027Consolidator) Consolidate(ctx context.Context) error {
 	slog.Info("St1027 data consolidation completed")
 	return nil
 }
-
-// st1027の難易度フィールド名から difficulty.ParseName で使用する名称へのマッピング
-var st1027DiffMap = map[string]func(s *importer.St1027Song) *importer.St1027Chart{
-	"basic":    func(s *importer.St1027Song) *importer.St1027Chart { return &s.Basic },
-	"advanced": func(s *importer.St1027Song) *importer.St1027Chart { return &s.Advanced },
-	"expert":   func(s *importer.St1027Song) *importer.St1027Chart { return &s.Expert },
-	"master":   func(s *importer.St1027Song) *importer.St1027Chart { return &s.Master },
-	"ultima":   func(s *importer.St1027Song) *importer.St1027Chart { return &s.Ultima },
-}
-
 func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialMap map[string]int) error {
 	var records []chartNotesRecord
 	for i := range c.data.Songs {
 		song := &c.data.Songs[i]
+		charts := map[string]*importer.St1027Chart{
+			"basic":    &song.Basic,
+			"advanced": &song.Advanced,
+			"expert":   &song.Expert,
+			"master":   &song.Master,
+			"ultima":   &song.Ultima,
+		}
+
 		officialID := strings.TrimSpace(song.Meta.OfficialID)
 		if officialID == "" {
 			continue
@@ -69,12 +67,11 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 			continue
 		}
 
-		for diffName, getChart := range st1027DiffMap {
+		for diffName, chart := range charts {
 			diffID := difficulty.ParseName(diffName).Int()
 			if diffID == 0 {
 				continue
 			}
-			chart := getChart(song)
 			if chart.NotesAll == nil || *chart.NotesAll <= 0 {
 				continue
 			}
