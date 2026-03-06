@@ -9,217 +9,6 @@ import (
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
-// TestBulkUpdateChartNotes_InitialInsert は notes が NULL の場合に正しく更新されることを確認
-func TestBulkUpdateChartNotes_InitialInsert(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
-		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
-	})
-	if err != nil {
-		t.Fatalf("failed to create workspace: %v", err)
-	}
-	defer ws.Close()
-
-	// テスト用の楽曲と譜面を挿入
-	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
-		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test song: %v", err)
-	}
-
-	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes)
-		VALUES (1, 1, 10.5, 0, NULL), (1, 2, 12.0, 0, NULL)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test charts: %v", err)
-	}
-
-	// NATUA データを準備
-	natuaData := &importer.NatuaData{
-		Songs: []importer.NatuaSong{
-			{
-				Meta: importer.NatuaMeta{
-					OfficialID: "OFF001",
-				},
-				Basic:    importer.NatuaChart{Notes: intPtr(500)},
-				Advanced: importer.NatuaChart{Notes: intPtr(800)},
-			},
-		},
-	}
-
-	consolidator := &NatuaConsolidator{
-		workspace: ws,
-		data:      natuaData,
-	}
-
-	officialMap := map[string]int{"OFF001": 1}
-	err = consolidator.bulkUpdateChartNotes(ctx, officialMap)
-	if err != nil {
-		t.Fatalf("bulkUpdateChartNotes returned error: %v", err)
-	}
-
-	// 検証
-	var notes1, notes2 *int
-	err = ws.DB().GetContext(ctx, &notes1, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 1`)
-	if err != nil {
-		t.Fatalf("failed to get notes for chart 1: %v", err)
-	}
-	err = ws.DB().GetContext(ctx, &notes2, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 2`)
-	if err != nil {
-		t.Fatalf("failed to get notes for chart 2: %v", err)
-	}
-
-	if notes1 == nil || *notes1 != 500 {
-		t.Errorf("expected notes1=500, got %v", notes1)
-	}
-	if notes2 == nil || *notes2 != 800 {
-		t.Errorf("expected notes2=800, got %v", notes2)
-	}
-}
-
-// TestBulkUpdateChartNotes_NoUpdateExisting は既存の notes が上書きされないことを確認
-func TestBulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
-		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
-	})
-	if err != nil {
-		t.Fatalf("failed to create workspace: %v", err)
-	}
-	defer ws.Close()
-
-	// テスト用の楽曲と譜面を挿入（既に notes が設定されている）
-	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
-		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test song: %v", err)
-	}
-
-	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes)
-		VALUES (1, 1, 10.5, 0, 400), (1, 2, 12.0, 0, 700)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test charts: %v", err)
-	}
-
-	// NATUA データ: 異なる notes 値を持つ
-	natuaData := &importer.NatuaData{
-		Songs: []importer.NatuaSong{
-			{
-				Meta: importer.NatuaMeta{
-					OfficialID: "OFF001",
-				},
-				Basic:    importer.NatuaChart{Notes: intPtr(500)},
-				Advanced: importer.NatuaChart{Notes: intPtr(800)},
-			},
-		},
-	}
-
-	consolidator := &NatuaConsolidator{
-		workspace: ws,
-		data:      natuaData,
-	}
-
-	officialMap := map[string]int{"OFF001": 1}
-	err = consolidator.bulkUpdateChartNotes(ctx, officialMap)
-	if err != nil {
-		t.Fatalf("bulkUpdateChartNotes returned error: %v", err)
-	}
-
-	// 検証: 更新されていないべき
-	var notes1, notes2 *int
-	err = ws.DB().GetContext(ctx, &notes1, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 1`)
-	if err != nil {
-		t.Fatalf("failed to get notes for chart 1: %v", err)
-	}
-	err = ws.DB().GetContext(ctx, &notes2, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 2`)
-	if err != nil {
-		t.Fatalf("failed to get notes for chart 2: %v", err)
-	}
-
-	if notes1 == nil || *notes1 != 400 {
-		t.Errorf("expected notes1=400 (not updated from 400), got %v", notes1)
-	}
-	if notes2 == nil || *notes2 != 700 {
-		t.Errorf("expected notes2=700 (not updated from 700), got %v", notes2)
-	}
-}
-
-// TestBulkUpdateChartNotes_NoOverwriteWithZero は 0 で上書きしないことを確認
-func TestBulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
-		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
-	})
-	if err != nil {
-		t.Fatalf("failed to create workspace: %v", err)
-	}
-	defer ws.Close()
-
-	// テスト用の楽曲と譜面を挿入（既に正の notes が設定されている）
-	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
-		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test song: %v", err)
-	}
-
-	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes)
-		VALUES (1, 1, 10.5, 0, 500)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test charts: %v", err)
-	}
-
-	// NATUA データ: 0 を含む（上書きしないべき）
-	natuaData := &importer.NatuaData{
-		Songs: []importer.NatuaSong{
-			{
-				Meta: importer.NatuaMeta{
-					OfficialID: "OFF001",
-				},
-				Basic: importer.NatuaChart{Notes: intPtr(0)},
-			},
-		},
-	}
-
-	consolidator := &NatuaConsolidator{
-		workspace: ws,
-		data:      natuaData,
-	}
-
-	officialMap := map[string]int{"OFF001": 1}
-	err = consolidator.bulkUpdateChartNotes(ctx, officialMap)
-	if err != nil {
-		t.Fatalf("bulkUpdateChartNotes returned error: %v", err)
-	}
-
-	// 検証: 500 のまま維持されているべき
-	var notes *int
-	err = ws.DB().GetContext(ctx, &notes, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 1`)
-	if err != nil {
-		t.Fatalf("failed to get notes for chart: %v", err)
-	}
-
-	if notes == nil || *notes != 500 {
-		t.Errorf("expected notes to remain 500 (not overwritten by 0), got %v", notes)
-	}
-}
-
 // TestBulkUpdateSongBPMs_InitialInsert は BPM が NULL の場合に正しく更新されることを確認
 func TestBulkUpdateSongBPMs_InitialInsert(t *testing.T) {
 	t.Parallel()
@@ -248,7 +37,7 @@ func TestBulkUpdateSongBPMs_InitialInsert(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(180),
+					BPM:        ptr(180),
 					BPMNodata:  false,
 				},
 			},
@@ -306,7 +95,7 @@ func TestBulkUpdateSongBPMs_NoOverwriteExisting(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(180),
+					BPM:        ptr(180),
 					BPMNodata:  false,
 				},
 			},
@@ -364,7 +153,7 @@ func TestBulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(0),
+					BPM:        ptr(0),
 					BPMNodata:  false,
 				},
 			},
@@ -392,10 +181,6 @@ func TestBulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
 	if bpm == nil || *bpm != 180 {
 		t.Errorf("expected bpm to remain 180 (not overwritten by 0), got %v", bpm)
 	}
-}
-
-func intPtr(i int) *int {
-	return &i
 }
 
 // TestNatuaConsolidator_Consolidate_EmptyData は空データの場合にエラーにならないことを確認
@@ -445,7 +230,8 @@ func TestNatuaConsolidator_Consolidate_NilData(t *testing.T) {
 	}
 }
 
-// TestNatuaConsolidator_Consolidate_FullFlow は BPM と Notes の両方が更新されることを確認
+// TestNatuaConsolidator_Consolidate_FullFlow は BPM のみが更新されることを確認
+// ノーツ数の補完は st1027 データソースが担当するため、natua では更新しない
 func TestNatuaConsolidator_Consolidate_FullFlow(t *testing.T) {
 	t.Parallel()
 
@@ -486,14 +272,14 @@ func TestNatuaConsolidator_Consolidate_FullFlow(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(180),
+					BPM:        ptr(180),
 					BPMNodata:  false,
 				},
-				Basic:    importer.NatuaChart{Notes: intPtr(300)},
-				Advanced: importer.NatuaChart{Notes: intPtr(500)},
-				Expert:   importer.NatuaChart{Notes: intPtr(800)},
-				Master:   importer.NatuaChart{Notes: intPtr(1200)},
-				Ultima:   importer.NatuaChart{Notes: intPtr(1500)},
+				Basic:    importer.NatuaChart{Notes: ptr(300)},
+				Advanced: importer.NatuaChart{Notes: ptr(500)},
+				Expert:   importer.NatuaChart{Notes: ptr(800)},
+				Master:   importer.NatuaChart{Notes: ptr(1200)},
+				Ultima:   importer.NatuaChart{Notes: ptr(1500)},
 			},
 		},
 	}
@@ -515,22 +301,17 @@ func TestNatuaConsolidator_Consolidate_FullFlow(t *testing.T) {
 		t.Errorf("expected bpm=180, got %v", bpm)
 	}
 
-	// Notes の検証
-	var notes []struct {
-		DifficultyID int `db:"difficulty_id"`
-		Notes        int `db:"notes"`
+	// Notes は更新されないべき（st1027 が担当）
+	var noteRows []struct {
+		Notes *int `db:"notes"`
 	}
-	err = ws.DB().SelectContext(ctx, &notes, `SELECT difficulty_id, notes FROM charts WHERE song_id = 1 ORDER BY difficulty_id`)
+	err = ws.DB().SelectContext(ctx, &noteRows, `SELECT notes FROM charts WHERE song_id = 1 ORDER BY difficulty_id`)
 	if err != nil {
 		t.Fatalf("failed to get notes: %v", err)
 	}
-
-	expectedNotes := map[int]int{1: 300, 2: 500, 3: 800, 4: 1200, 5: 1500}
-	for _, n := range notes {
-		if expected, ok := expectedNotes[n.DifficultyID]; ok {
-			if n.Notes != expected {
-				t.Errorf("difficulty %d: expected notes=%d, got %d", n.DifficultyID, expected, n.Notes)
-			}
+	for i, row := range noteRows {
+		if row.Notes != nil {
+			t.Errorf("difficulty %d: expected notes=NULL, got %d", i+1, *row.Notes)
 		}
 	}
 }
@@ -571,11 +352,11 @@ func TestNatuaConsolidator_Consolidate_SkipsNodata(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(200),
+					BPM:        ptr(200),
 					BPMNodata:  true, // nodata フラグ
 				},
 				Basic: importer.NatuaChart{
-					Notes:       intPtr(500),
+					Notes:       ptr(500),
 					NotesNodata: true, // nodata フラグ
 				},
 			},

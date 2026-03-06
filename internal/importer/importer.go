@@ -19,6 +19,8 @@ const (
 	DataSourceOtogeDb DataSourceType = "otoge_db"
 	// DataSourceAdditionalSongs は追加楽曲のデータソースです
 	DataSourceAdditionalSongs DataSourceType = "additional_songs"
+	// DataSourceSt1027 はst1027のノーツ数補完用データソースです
+	DataSourceSt1027 DataSourceType = "st1027"
 )
 
 // ImportResult はインポート処理の結果を表します

@@ -20,6 +20,7 @@ type ConsolidationOptions struct {
 type ConsolidationSources struct {
 	Official        *importer.OfficialData
 	AdditionalSongs *importer.AdditionalSongsData
+	St1027          *importer.St1027Data
 	Natua           *importer.NatuaData
 	Mainframe       *importer.MainframeData
 	OtogeDb         *importer.OtogeDbData
@@ -173,6 +174,13 @@ func (s *ConsolidationService) consolidateSource(ctx context.Context, workspace 
 			return nil
 		}
 		consolidator := NewNatuaConsolidator(workspace, s.sources.Natua)
+		return consolidator.Consolidate(ctx)
+	case "st1027":
+		if s.sources.St1027 == nil {
+			slog.Warn("Skipping st1027 consolidation due to missing data")
+			return nil
+		}
+		consolidator := NewSt1027Consolidator(workspace, s.sources.St1027)
 		return consolidator.Consolidate(ctx)
 	case "mainframe":
 		if s.sources.Mainframe == nil {

@@ -8,21 +8,13 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
-	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
 type songBPMRecord struct {
 	ID  int `db:"id"`
 	BPM int `db:"bpm"`
-}
-
-type chartNotesRecord struct {
-	SongID       int `db:"song_id"`
-	DifficultyID int `db:"difficulty_id"`
-	Notes        int `db:"notes"`
 }
 
 // bulkUpdateSongBPMs 用のテンプレート（パフォーマンスのため事前にパースしておく）
@@ -40,30 +32,6 @@ WHERE id IN (
 ) AND (bpm IS NULL OR bpm = 0)
 `))
 
-// bulkUpdateChartNotes 用のテンプレート（パフォーマンスのため事前にパースしておく）
-// SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使う
-// 差分検知: 既存の notes を 0 や null で上書きしないようにする
-var bulkUpdateChartNotesTpl = template.Must(template.New("bulkUpdateChartNotes").Parse(`
-UPDATE charts SET notes = CASE
-	{{- range .}}
-	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN {{.Notes}}
-	{{- end}}
-	ELSE notes
-END
-WHERE EXISTS (
-	SELECT 1 FROM (
-		{{- range $i, $e := .}}
-		{{- if $i}} UNION ALL{{end}}
-		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, {{.Notes}} AS new_notes
-		{{- end}}
-	) AS t
-	WHERE charts.song_id = t.song_id 
-	  AND charts.difficulty_id = t.difficulty_id
-	  AND (charts.notes IS NULL OR charts.notes = 0)
-	  AND t.new_notes > 0
-)
-`))
-
 // NatuaConsolidator は NATUA データの補完を担当します。
 type NatuaConsolidator struct {
 	workspace *songchart.SongChartWorkspace
@@ -78,7 +46,8 @@ func NewNatuaConsolidator(workspace *songchart.SongChartWorkspace, data *importe
 	}
 }
 
-// Consolidate は NATUA ソースから BPM や NOTES を補完します。
+// Consolidate は NATUA ソースから BPM を補完します。
+// ノーツ数の補完は st1027 データソースが担当します。
 func (c *NatuaConsolidator) Consolidate(ctx context.Context) error {
 	if c.data == nil || len(c.data.Songs) == 0 {
 		slog.Warn("Natua data is empty; skipping consolidation")
@@ -91,9 +60,6 @@ func (c *NatuaConsolidator) Consolidate(ctx context.Context) error {
 	}
 
 	if err := c.bulkUpdateSongBPMs(ctx, officialMap); err != nil {
-		return err
-	}
-	if err := c.bulkUpdateChartNotes(ctx, officialMap); err != nil {
 		return err
 	}
 
@@ -134,74 +100,4 @@ func (c *NatuaConsolidator) bulkUpdateSongBPMs(ctx context.Context, officialMap 
 	affected, _ := result.RowsAffected()
 	slog.Info("Natua songs metadata updated", "count", affected)
 	return nil
-}
-
-func (c *NatuaConsolidator) bulkUpdateChartNotes(ctx context.Context, officialMap map[string]int) error {
-	var records []chartNotesRecord
-	for _, song := range c.data.Songs {
-		officialID := strings.TrimSpace(song.Meta.OfficialID)
-		if officialID == "" {
-			continue
-		}
-		songID, exists := officialMap[officialID]
-		if !exists {
-			continue
-		}
-
-		for diff, chart := range map[string]importer.NatuaChart{
-			"basic":    song.Basic,
-			"advanced": song.Advanced,
-			"expert":   song.Expert,
-			"master":   song.Master,
-			"ultima":   song.Ultima,
-		} {
-			diffID := difficulty.ParseName(diff).Int()
-			if diffID == 0 {
-				continue
-			}
-			if chart.Notes == nil || *chart.Notes < 0 || chart.NotesNodata {
-				continue
-			}
-			records = append(records, chartNotesRecord{
-				SongID:       songID,
-				DifficultyID: diffID,
-				Notes:        *chart.Notes,
-			})
-		}
-	}
-
-	if len(records) == 0 {
-		return nil
-	}
-
-	// バッチに分割して処理（SQLiteのUNION ALL制限対策）
-	var totalAffected int64
-	for i := 0; i < len(records); i += info.SQLiteCompoundSelectLimit {
-		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
-		batch := records[i:end]
-
-		affected, err := c.executeBulkUpdateChartNotes(ctx, batch)
-		if err != nil {
-			return err
-		}
-		totalAffected += affected
-	}
-
-	slog.Info("Natua chart notes updated", "count", totalAffected)
-	return nil
-}
-
-func (c *NatuaConsolidator) executeBulkUpdateChartNotes(ctx context.Context, records []chartNotesRecord) (int64, error) {
-	var buf bytes.Buffer
-	if err := bulkUpdateChartNotesTpl.Execute(&buf, records); err != nil {
-		return 0, fmt.Errorf("failed to execute bulk update chart notes template: %w", err)
-	}
-
-	result, err := c.workspace.DB().ExecContext(ctx, buf.String())
-	if err != nil {
-		return 0, fmt.Errorf("failed to execute bulk update chart notes: %w", err)
-	}
-
-	affected, _ := result.RowsAffected()
-	return affected, nil
 }
