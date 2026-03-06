@@ -45,8 +45,8 @@ func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Basic:    importer.St1027Chart{NotesAll: intPtr(500)},
-				Advanced: importer.St1027Chart{NotesAll: intPtr(800)},
+				Basic:    importer.St1027Chart{NotesAll: ptr(500)},
+				Advanced: importer.St1027Chart{NotesAll: ptr(800)},
 			},
 		},
 	}
@@ -118,8 +118,8 @@ func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Basic:    importer.St1027Chart{NotesAll: intPtr(500)},
-				Advanced: importer.St1027Chart{NotesAll: intPtr(800)},
+				Basic:    importer.St1027Chart{NotesAll: ptr(500)},
+				Advanced: importer.St1027Chart{NotesAll: ptr(800)},
 			},
 		},
 	}
@@ -191,7 +191,7 @@ func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Basic: importer.St1027Chart{NotesAll: intPtr(0)},
+				Basic: importer.St1027Chart{NotesAll: ptr(0)},
 			},
 		},
 	}

@@ -37,7 +37,7 @@ func TestBulkUpdateSongBPMs_InitialInsert(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(180),
+					BPM:        ptr(180),
 					BPMNodata:  false,
 				},
 			},
@@ -95,7 +95,7 @@ func TestBulkUpdateSongBPMs_NoOverwriteExisting(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(180),
+					BPM:        ptr(180),
 					BPMNodata:  false,
 				},
 			},
@@ -153,7 +153,7 @@ func TestBulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(0),
+					BPM:        ptr(0),
 					BPMNodata:  false,
 				},
 			},
@@ -181,10 +181,6 @@ func TestBulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
 	if bpm == nil || *bpm != 180 {
 		t.Errorf("expected bpm to remain 180 (not overwritten by 0), got %v", bpm)
 	}
-}
-
-func intPtr(i int) *int {
-	return &i
 }
 
 // TestNatuaConsolidator_Consolidate_EmptyData は空データの場合にエラーにならないことを確認
@@ -276,14 +272,14 @@ func TestNatuaConsolidator_Consolidate_FullFlow(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(180),
+					BPM:        ptr(180),
 					BPMNodata:  false,
 				},
-				Basic:    importer.NatuaChart{Notes: intPtr(300)},
-				Advanced: importer.NatuaChart{Notes: intPtr(500)},
-				Expert:   importer.NatuaChart{Notes: intPtr(800)},
-				Master:   importer.NatuaChart{Notes: intPtr(1200)},
-				Ultima:   importer.NatuaChart{Notes: intPtr(1500)},
+				Basic:    importer.NatuaChart{Notes: ptr(300)},
+				Advanced: importer.NatuaChart{Notes: ptr(500)},
+				Expert:   importer.NatuaChart{Notes: ptr(800)},
+				Master:   importer.NatuaChart{Notes: ptr(1200)},
+				Ultima:   importer.NatuaChart{Notes: ptr(1500)},
 			},
 		},
 	}
@@ -356,11 +352,11 @@ func TestNatuaConsolidator_Consolidate_SkipsNodata(t *testing.T) {
 			{
 				Meta: importer.NatuaMeta{
 					OfficialID: "OFF001",
-					BPM:        intPtr(200),
+					BPM:        ptr(200),
 					BPMNodata:  true, // nodata フラグ
 				},
 				Basic: importer.NatuaChart{
-					Notes:       intPtr(500),
+					Notes:       ptr(500),
 					NotesNodata: true, // nodata フラグ
 				},
 			},
