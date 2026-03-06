@@ -182,8 +182,7 @@ func ExecuteBulkUpdateChartNotes(ctx context.Context, db sqlx.ExtContext, record
 		return 0, fmt.Errorf("failed to execute bulk update chart notes: %w", err)
 	}
 
-	affected, _ := result.RowsAffected()
-	return affected, nil
+	return result.RowsAffected()
 }
 
 // BulkUpdateChartNotesInBatches は notes をバッチに分割して一括更新します。
