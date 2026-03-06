@@ -181,6 +181,5 @@ func ExecuteBulkUpdateChartNotes(ctx context.Context, db *sqlx.DB, records []Cha
 		return 0, fmt.Errorf("failed to execute bulk update chart notes: %w", err)
 	}
 
-	affected, _ := result.RowsAffected()
-	return affected, nil
+	return result.RowsAffected()
 }
