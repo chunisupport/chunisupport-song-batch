@@ -7,7 +7,6 @@ import (
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/domain/difficulty"
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
-	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
@@ -84,17 +83,9 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 		return nil
 	}
 
-	// バッチに分割して処理（SQLiteのUNION ALL制限対策）
-	var totalAffected int64
-	for i := 0; i < len(records); i += info.SQLiteCompoundSelectLimit {
-		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
-		batch := records[i:end]
-
-		affected, err := ExecuteBulkUpdateChartNotes(ctx, c.workspace.DB(), batch)
-		if err != nil {
-			return err
-		}
-		totalAffected += affected
+	totalAffected, err := BulkUpdateChartNotesInBatches(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return err
 	}
 
 	slog.Info("St1027 chart notes updated", "count", totalAffected)
