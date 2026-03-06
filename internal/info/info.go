@@ -5,8 +5,6 @@ const (
 	Name = "github.com/chunisupport/chunisupport-song-batch"
 	// Version はアプリケーションのバージョンです。
 	Version = "0.0.1"
-	// ConfigDir は設定ファイルのディレクトリです。
-	ConfigDir = ".config/"
 	// ResourceDir はリソースファイルのディレクトリです。
 	ResourceDir = ".resources/"
 	// MigrationDir はマイグレーションファイルのディレクトリです。

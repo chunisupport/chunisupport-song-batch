@@ -2,14 +2,11 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 )
 
 // Auth は認証関連の設定を定義します。
@@ -21,12 +18,11 @@ type Auth struct {
 
 // Config はアプリケーション全体の設定を表します。
 type Config struct {
-	AppPort     int               `json:"app_port"`
-	LogLevel    string            `json:"log_level"`
-	PwPepper    string            `json:"pw_pepper"`
-	Auth        Auth              `json:"auth"`
-	Database    Database          `json:"database"`
-	Datasources []DatasourceEntry `json:"datasources"`
+	AppPort  int      `json:"app_port"`
+	LogLevel string   `json:"log_level"`
+	PwPepper string   `json:"pw_pepper"`
+	Auth     Auth     `json:"auth"`
+	Database Database `json:"database"`
 }
 
 // DbConfig はデータベース接続パラメータを定義します。
@@ -75,25 +71,9 @@ func loadDbConfigFromEnv() (DbConfig, error) {
 	return config, nil
 }
 
-// DatasourceEntry はバッチインポート用のデータソースを定義します。
-type DatasourceEntry struct {
-	Name   string `json:"name"`
-	Active bool   `json:"active"`
-}
-
-// LoadConfig は指定された環境に基づいてJSONファイルからアプリケーション設定を読み込みます
-func LoadConfig(env string) (Config, error) {
+// LoadConfigFromEnv は環境変数からアプリケーション設定を読み込みます。
+func LoadConfigFromEnv() (Config, error) {
 	var config Config
-
-	configFile, err := os.Open(info.ConfigDir + env + ".settings.json")
-	if err != nil {
-		return config, err
-	}
-	defer configFile.Close()
-
-	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		return config, err
-	}
 
 	if pepper, ok := os.LookupEnv("PW_PEPPER"); ok && pepper != "" {
 		config.PwPepper = pepper

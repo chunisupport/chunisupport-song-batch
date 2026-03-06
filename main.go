@@ -53,9 +53,9 @@ func main() {
 
 	flags := config.NewBatchFlags()
 
-	cfg, err := config.LoadConfig(env)
+	cfg, err := config.LoadConfigFromEnv()
 	if err != nil {
-		slog.Error("Failed to load config: " + err.Error())
+		slog.Error("Failed to load config from environment variables: " + err.Error())
 		os.Exit(1)
 	}
 
@@ -73,7 +73,7 @@ func main() {
 
 	slog.Info("Connected to the database")
 
-	if err := executeDataImportBatch(database, cfg, flags); err != nil {
+	if err := executeDataImportBatch(database, cfg.PwPepper, flags); err != nil {
 		slog.Error("Data import failed: " + err.Error())
 		os.Exit(1)
 	}
@@ -84,14 +84,17 @@ func main() {
 // executeDataImportBatch はデータインポートプロセスを調整します。
 // さまざまなソースからデータをダウンロードし、データベースにインポートし、
 // データを最終テーブルに統合します。
-func executeDataImportBatch(db *sqlx.DB, cfg config.Config, flags config.BatchFlags) error {
+func executeDataImportBatch(db *sqlx.DB, pwPepper string, flags config.BatchFlags) error {
 	slog.Info("Executing data import batch...")
-	resolvedDatasources, resolveErr := resolveDatasources(cfg.Datasources)
+	resolvedDatasources, resolveErr := resolveAllDatasources()
 	if resolveErr != nil {
 		slog.Warn("Some datasources failed to resolve and will be skipped", "error", resolveErr)
 	}
 	if len(resolvedDatasources) == 0 {
 		return fmt.Errorf("no datasources could be resolved")
+	}
+	if err := validateMajorUpdateDatasources(flags, resolvedDatasources); err != nil {
+		return err
 	}
 
 	if flags.SkipDownload {
@@ -106,9 +109,12 @@ func executeDataImportBatch(db *sqlx.DB, cfg config.Config, flags config.BatchFl
 	if err != nil {
 		return err
 	}
+	if err := validateMajorUpdateSources(flags, sources); err != nil {
+		return err
+	}
 
 	ctx := context.Background()
-	if err := consolidateToFinalTables(ctx, db, cfg, flags, sources); err != nil {
+	if err := consolidateToFinalTables(ctx, db, pwPepper, flags, sources, resolvedDatasources); err != nil {
 		return fmt.Errorf("failed to consolidate data: %w", err)
 	}
 
@@ -140,11 +146,6 @@ func importDataByDatasources(datasources []datasource.Datasource) (service.Conso
 	const outputDir = ".datasources"
 	factory := importer.NewImporterFactory()
 	for _, ds := range datasources {
-		if !ds.Active {
-			slog.Warn("Skipping inactive datasource", "type", ds.Type)
-			continue
-		}
-
 		slog.Info("Processing datasource", "type", ds.Type)
 		dsImporter, err := factory.CreateImporter(importer.DataSourceType(ds.Type))
 		if err != nil {
@@ -208,18 +209,21 @@ func importDataByDatasources(datasources []datasource.Datasource) (service.Conso
 	return sources, nil
 }
 
-// resolveDatasources は設定されたデータソースを解決します
-func resolveDatasources(datasources []config.DatasourceEntry) ([]datasource.Datasource, error) {
+// resolveAllDatasources はサポートされている全データソースを解決します。
+func resolveAllDatasources() ([]datasource.Datasource, error) {
 	var (
 		resolved []datasource.Datasource
 		errs     []error
 	)
+	factory := importer.NewImporterFactory()
+	supported := factory.GetSupportedDataSources()
 
-	for _, ds := range datasources {
-		definition, err := registry.Resolve(ds.Name, ds.Active)
+	for _, sourceType := range supported {
+		name := string(sourceType)
+		definition, err := registry.Resolve(name)
 		if err != nil {
-			wrapped := fmt.Errorf("failed to resolve datasource %s: %w", ds.Name, err)
-			slog.Warn("Skipping datasource due to resolution failure", "name", ds.Name, "error", err)
+			wrapped := fmt.Errorf("failed to resolve datasource %s: %w", name, err)
+			slog.Warn("Skipping datasource due to resolution failure", "name", name, "error", err)
 			errs = append(errs, wrapped)
 			continue
 		}
@@ -234,8 +238,61 @@ func resolveDatasources(datasources []config.DatasourceEntry) ([]datasource.Data
 	return resolved, nil
 }
 
+func validateMajorUpdateDatasources(flags config.BatchFlags, datasources []datasource.Datasource) error {
+	if !flags.MajorUpdate {
+		return nil
+	}
+
+	required := map[string]bool{
+		"official":         false,
+		"additional_songs": false,
+	}
+
+	for _, ds := range datasources {
+		if _, ok := required[ds.Type]; ok {
+			required[ds.Type] = true
+		}
+	}
+
+	missing := make([]string, 0, len(required))
+	for name, exists := range required {
+		if !exists {
+			missing = append(missing, name)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("major update requires datasources to be resolved: %v", missing)
+	}
+
+	return nil
+}
+
+func datasourceNames(datasources []datasource.Datasource) []string {
+	names := make([]string, 0, len(datasources))
+	for _, ds := range datasources {
+		names = append(names, ds.Type)
+	}
+	return names
+}
+
+func validateMajorUpdateSources(flags config.BatchFlags, sources service.ConsolidationSources) error {
+	if !flags.MajorUpdate {
+		return nil
+	}
+
+	if sources.Official == nil {
+		return fmt.Errorf("major update requires official datasource data")
+	}
+	if sources.AdditionalSongs == nil {
+		return fmt.Errorf("major update requires additional_songs datasource data")
+	}
+
+	return nil
+}
+
 // consolidateToFinalTables はインポートされたデータを最終テーブルに統合します。
-func consolidateToFinalTables(ctx context.Context, db *sqlx.DB, cfg config.Config, flags config.BatchFlags, sources service.ConsolidationSources) error {
+func consolidateToFinalTables(ctx context.Context, db *sqlx.DB, pwPepper string, flags config.BatchFlags, sources service.ConsolidationSources, datasources []datasource.Datasource) error {
 	slog.Info("Starting data consolidation to final tables")
 
 	// リポジトリのインスタンス生成
@@ -245,7 +302,7 @@ func consolidateToFinalTables(ctx context.Context, db *sqlx.DB, cfg config.Confi
 	opts := service.ConsolidationOptions{
 		MajorUpdate: flags.MajorUpdate,
 	}
-	consolidationService := service.NewConsolidationService(db, difficultyRepo, genreRepo, cfg.PwPepper, cfg.Datasources, opts, sources)
+	consolidationService := service.NewConsolidationService(db, difficultyRepo, genreRepo, pwPepper, datasourceNames(datasources), opts, sources)
 
 	workspace, err := consolidationService.BuildWorkspace(ctx)
 	if err != nil {

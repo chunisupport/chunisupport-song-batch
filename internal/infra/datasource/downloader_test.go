@@ -27,9 +27,8 @@ func TestDownloader_DownloadAll_ErrorHandling(t *testing.T) {
 	defer os.RemoveAll(outputDir)
 
 	datasources := []Datasource{
-		{Type: "success", URL: server.URL + "/success", Active: true},
-		{Type: "fail", URL: server.URL + "/fail", Active: true},
-		{Type: "inactive", URL: server.URL + "/inactive", Active: false},
+		{Type: "success", URL: server.URL + "/success"},
+		{Type: "fail", URL: server.URL + "/fail"},
 	}
 
 	downloader := NewDownloader(outputDir)
@@ -67,8 +66,8 @@ func TestDownloader_DownloadAll_AllFail(t *testing.T) {
 	defer os.RemoveAll(outputDir)
 
 	datasources := []Datasource{
-		{Type: "fail1", URL: server.URL + "/fail1", Active: true},
-		{Type: "fail2", URL: server.URL + "/fail2", Active: true},
+		{Type: "fail1", URL: server.URL + "/fail1"},
+		{Type: "fail2", URL: server.URL + "/fail2"},
 	}
 
 	downloader := NewDownloader(outputDir)

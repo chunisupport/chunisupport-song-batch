@@ -31,7 +31,7 @@ func Register(name string, provider Provider) {
 }
 
 // Resolve は指定された名前のデータソース定義を構築します。
-func Resolve(name string, active bool) (infra.Datasource, error) {
+func Resolve(name string) (infra.Datasource, error) {
 	provider, ok := providers[name]
 	if !ok {
 		return infra.Datasource{}, fmt.Errorf("datasource provider %q not found", name)
@@ -50,6 +50,5 @@ func Resolve(name string, active bool) (infra.Datasource, error) {
 		Type:   definition.Type,
 		URL:    definition.URL,
 		Params: definition.Params,
-		Active: active,
 	}, nil
 }

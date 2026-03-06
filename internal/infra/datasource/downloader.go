@@ -21,7 +21,6 @@ type Datasource struct {
 	Type   string `json:"type"`
 	URL    string `json:"url"`
 	Params any    `json:"params"`
-	Active bool   `json:"active"`
 }
 
 // Downloader はデータソースからファイルをダウンロードします
@@ -49,18 +48,14 @@ func (d *Downloader) DownloadAll(datasources []Datasource) error {
 	var g errgroup.Group
 	g.SetLimit(8)
 	var (
-		mu              sync.Mutex
-		downloadErrors  []string
-		successCount    int
-		activeDownloads int
+		mu             sync.Mutex
+		downloadErrors []string
+		successCount   int
+		totalDownloads int
 	)
 
 	for _, ds := range datasources {
-		if !ds.Active {
-			slog.Warn("Skipping inactive datasource", "type", ds.Type)
-			continue
-		}
-		activeDownloads++
+		totalDownloads++
 
 		ds := ds // loop variable capture
 		g.Go(func() error {
@@ -100,7 +95,7 @@ func (d *Downloader) DownloadAll(datasources []Datasource) error {
 	}
 
 	if len(downloadErrors) > 0 {
-		slog.Warn("Some datasource downloads failed", "failed", downloadErrors, "succeeded", successCount, "total", activeDownloads)
+		slog.Warn("Some datasource downloads failed", "failed", downloadErrors, "succeeded", successCount, "total", totalDownloads)
 	}
 
 	return nil

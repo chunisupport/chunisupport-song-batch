@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/chunisupport/chunisupport-song-batch/internal/config"
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
@@ -32,7 +31,7 @@ type ConsolidationService struct {
 	difficultyRepo domainrepo.DifficultyRepository
 	genreRepo      domainrepo.GenreRepository
 	pwPepper       string
-	datasources    []config.DatasourceEntry
+	datasources    []string
 	opts           ConsolidationOptions
 	sources        ConsolidationSources
 }
@@ -43,7 +42,7 @@ func NewConsolidationService(
 	difficultyRepo domainrepo.DifficultyRepository,
 	genreRepo domainrepo.GenreRepository,
 	pwPepper string,
-	datasources []config.DatasourceEntry,
+	datasources []string,
 	opts ConsolidationOptions,
 	sources ConsolidationSources,
 ) *ConsolidationService {
@@ -58,7 +57,7 @@ func NewConsolidationService(
 	}
 }
 
-// ConsolidateAll はすべてのアクティブなデータソースを統合します。
+// ConsolidateAll は渡されたデータソースをすべて統合します。
 func (s *ConsolidationService) ConsolidateAll(ctx context.Context) error {
 	workspace, err := s.BuildWorkspace(ctx)
 	if err != nil {
@@ -73,10 +72,10 @@ func (s *ConsolidationService) ConsolidateAll(ctx context.Context) error {
 
 // ConsolidateBySource は指定されたデータソースのみを統合します。
 func (s *ConsolidationService) ConsolidateBySource(ctx context.Context, sourceType string) error {
-	var target []config.DatasourceEntry
-	for _, ds := range s.datasources {
-		if ds.Name == sourceType {
-			target = append(target, ds)
+	var target []string
+	for _, sourceName := range s.datasources {
+		if sourceName == sourceType {
+			target = append(target, sourceName)
 			break
 		}
 	}
@@ -95,7 +94,7 @@ func (s *ConsolidationService) ConsolidateBySource(ctx context.Context, sourceTy
 	return s.SyncWorkspace(ctx, workspace, s.db)
 }
 
-// BuildWorkspace はアクティブなデータソースを SQLite ワークスペースに取り込みます。
+// BuildWorkspace は対象データソースを SQLite ワークスペースに取り込みます。
 func (s *ConsolidationService) BuildWorkspace(ctx context.Context) (*songchart.SongChartWorkspace, error) {
 	return s.buildWorkspace(ctx, s.datasources)
 }
@@ -115,25 +114,20 @@ func (s *ConsolidationService) SyncWorkspace(ctx context.Context, workspace *son
 	return nil
 }
 
-func (s *ConsolidationService) buildWorkspace(ctx context.Context, datasources []config.DatasourceEntry) (*songchart.SongChartWorkspace, error) {
-	active := make([]config.DatasourceEntry, 0, len(datasources))
-	for _, ds := range datasources {
+func (s *ConsolidationService) buildWorkspace(ctx context.Context, datasources []string) (*songchart.SongChartWorkspace, error) {
+	target := make([]string, 0, len(datasources))
+	for _, sourceName := range datasources {
 		if s.opts.MajorUpdate {
-			if ds.Name != "official" && ds.Name != "additional_songs" {
-				slog.Info("Skipping datasource in major update mode", "type", ds.Name)
+			if sourceName != "official" && sourceName != "additional_songs" {
+				slog.Info("Skipping datasource in major update mode", "type", sourceName)
 				continue
 			}
 		}
-
-		if !ds.Active {
-			slog.Warn("Skipping inactive datasource for consolidation", "type", ds.Name)
-			continue
-		}
-		active = append(active, ds)
+		target = append(target, sourceName)
 	}
 
-	if len(active) == 0 {
-		slog.Warn("No active datasources to consolidate")
+	if len(target) == 0 {
+		slog.Warn("No datasources to consolidate")
 		return nil, nil
 	}
 
@@ -142,8 +136,8 @@ func (s *ConsolidationService) buildWorkspace(ctx context.Context, datasources [
 		return nil, fmt.Errorf("failed to create song chart workspace: %w", err)
 	}
 
-	for _, ds := range active {
-		if err := s.consolidateSource(ctx, workspace, ds.Name); err != nil {
+	for _, sourceName := range target {
+		if err := s.consolidateSource(ctx, workspace, sourceName); err != nil {
 			_ = workspace.Close()
 			return nil, err
 		}

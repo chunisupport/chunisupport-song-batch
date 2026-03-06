@@ -4,7 +4,7 @@
 ChuniSupport Song Batch は、アーケードゲーム「チュウニズム」の譜面データを定期的に取得し、MySQL データベースへ統合するための Go 製バッチアプリケーションです。複数の外部データソースから JSON をダウンロードし、インポートした内容を SQLite ワークスペースで統合したあと MySQL に同期します。アプリケーションのエントリーポイントは `main.go` に実装されています。
 
 ## 主な処理フロー
-1. **データソース解決** – 設定ファイル（`.config/<env>.settings.json`）と環境変数から有効なデータソースを解決します。
+1. **データソース解決** – サポート対象の全データソースを環境変数から解決します。
 2. **データダウンロード** – `internal/infra/datasource.Downloader` が `.datasources/` 配下に JSON ファイルを保存します。mainframe は Google Sheets から専用ロジックで取得します。
 3. **インポート** – データソースごとのインポーターが JSON を読み取り、共通 DTO に変換します。
 4. **ワークスペース統合** – `service.ConsolidationService` が SQLite ワークスペースを構築し、全ソースのデータを統合します。
@@ -12,7 +12,7 @@ ChuniSupport Song Batch は、アーケードゲーム「チュウニズム」�
 
 ## リポジトリ構成
 - `main.go`: バッチアプリケーションのエントリーポイント
-- `internal/config`: 設定ファイル・フラグの読み込み
+- `internal/config`: 環境変数・フラグの読み込み
 - `internal/datasource`: データソース定義とレジストリ
 - `internal/importer`: JSON 取り込みと DTO 定義
 - `internal/infra`: ダウンローダー、DB 接続、リポジトリ実装
@@ -43,34 +43,14 @@ FLUSH PRIVILEGES;
 ```
 > **注意:** 本リポジトリには MySQL のテーブル定義が含まれていません。必要なスキーマはチーム内で管理している情報を適用してください。
 
-### 3. 設定ファイルの作成
-`.config/develop.settings.json` を作成し、アプリケーション設定を記述します。以下はローカル開発向けの一例です。
-```json
-{
-  "app_port": 8080,
-  "log_level": "info",
-  "auth": {
-    "jwt_secret": "local-jwt-secret",
-    "jwt_expiration_hour": 24,
-    "session_expiration_hour": 24
-  },
-  "datasources": [
-    { "name": "official", "active": true },
-    { "name": "natua", "active": true },
-    { "name": "mainframe", "active": false },
-    { "name": "otoge_db", "active": true }
-  ]
-}
-```
-`APP_ENV` を指定すると `<env>.settings.json` が読み込まれます。未指定時は `develop` が利用されます。
-DB 接続情報は `.env` の `DB_*` で指定します。
-
-### 4. 環境変数の設定
+### 3. 環境変数の設定
 `.env` またはシェル環境に以下の環境変数を設定します。mainframe 用の値が不要な場合、省略可能です。
+
+`--major-update` を利用する場合は、`CHUNISUPPORT_BATCH_OFFICIAL_URL` と `CHUNISUPPORT_BATCH_ADDITIONAL_SONGS_SHEET_ID`（および Google Sheets 関連の環境変数）が必須です。
 
 | 変数名 | 用途 |
 | --- | --- |
-| `APP_ENV` | 読み込む設定ファイル（例: `develop`） |
+| `APP_ENV` | ログレベル判定に利用（`production` のとき Info、それ以外は Debug） |
 | `PW_PEPPER` | 公式楽曲の `display_id` 生成に利用するペッパー値 |
 | `DB_NAME` | MySQL データベース名 |
 | `DB_HOST` | MySQL ホスト名 |
@@ -79,12 +59,15 @@ DB 接続情報は `.env` の `DB_*` で指定します。
 | `DB_PASS` | MySQL パスワード |
 | `CHUNISUPPORT_BATCH_OFFICIAL_URL` | 公式データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_NATUA_URL` | Natua データソースのダウンロード URL |
+| `CHUNISUPPORT_BATCH_ST1027_URL` | st1027 データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_OTOGE_DB_URL` | otoge-db データソースのダウンロード URL（リリース日補完用） |
 | `CHUNISUPPORT_BATCH_GOOGLE_CLOUD_API_KEY` | mainframe データソースの Google API キー |
 | `CHUNISUPPORT_BATCH_GOOGLE_SHEET_ID` | mainframe データソースのスプレッドシート ID |
+| `CHUNISUPPORT_BATCH_ADDITIONAL_SONGS_SHEET_ID` | additional_songs データソースのスプレッドシート ID |
+| `CHUNISUPPORT_BATCH_GOOGLE_SPREADSHEET_BASE_URL` | Google Sheets API のベース URL |
 
 mainframe のデータソースでは API キーとシート ID をもとに Google Sheets API を利用します。
-### 5. データソース JSON の扱い
+### 4. データソース JSON の扱い
 - 初回実行時に `.datasources/` ディレクトリが生成され、各種 JSON が保存されます。
 - `--skip-download` フラグを指定すると既存ファイルを利用します。社内で共有されているサンプル JSON がある場合は `.datasources/<type>.json` として配置してください。
 
@@ -106,8 +89,7 @@ go test ./...
 ```
 
 ## トラブルシューティング
-- **設定ファイルが読み込めない**: `APP_ENV` の指定と `.config/<env>.settings.json` の配置を確認してください。
-- **データソース解決に失敗する**: 必要な環境変数が未設定の可能性があります。ログを確認し、該当 URL や API キーを設定してください。
+- **データソース解決に失敗する**: いずれかのデータソースに必要な環境変数が未設定の可能性があります。ログを確認し、該当 URL や API キーを設定してください。
 - **MySQL 接続に失敗する**: 接続情報（ホスト、ポート、ユーザー、パスワード）と MySQL が起動しているかを確認してください。
 - **mainframe ダウンロードが失敗する**: `.datasources/mainframe.json` を削除し、Google API キーとシート ID が正しいかを確認したうえで再実行してください。
 
