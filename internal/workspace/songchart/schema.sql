@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS charts (
     const REAL NOT NULL CHECK(const >= 0),
     is_const_unknown INTEGER NOT NULL DEFAULT 1 CHECK(is_const_unknown IN (0,1)),
     notes INTEGER,
+    notes_designer TEXT,
     FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE,
     FOREIGN KEY(difficulty_id) REFERENCES difficulties(id) ON DELETE CASCADE,
     UNIQUE(song_id, difficulty_id),

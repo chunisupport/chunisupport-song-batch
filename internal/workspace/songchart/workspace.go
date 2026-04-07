@@ -176,7 +176,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		key := chartKey(mysqlSongID, chart.DifficultyID)
 		existing, exists := mysqlCharts[key]
 
-		finalConst, finalUnknown, finalNotes, action := resolveChartUpdate(existing, exists, chart, opts)
+		finalConst, finalUnknown, finalNotes, finalNotesDesigner, action := resolveChartUpdate(existing, exists, chart, opts)
 
 		switch action {
 		case actionInsert:
@@ -186,6 +186,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 				Const:         finalConst,
 				TargetUnknown: finalUnknown,
 				Notes:         finalNotes,
+				NotesDesigner: finalNotesDesigner,
 			})
 		case actionUpdate:
 			chartsToUpdate = append(chartsToUpdate, chartUpdateRecord{
@@ -194,6 +195,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 				Const:         finalConst,
 				TargetUnknown: finalUnknown,
 				Notes:         finalNotes,
+				NotesDesigner: finalNotesDesigner,
 			})
 		}
 	}
@@ -262,12 +264,13 @@ type workspaceSong struct {
 }
 
 type workspaceChart struct {
-	ID             int           `db:"id"`
-	SongID         int           `db:"song_id"`
-	DifficultyID   int           `db:"difficulty_id"`
-	Const          float64       `db:"const"`
-	IsConstUnknown bool          `db:"is_const_unknown"`
-	Notes          sql.NullInt64 `db:"notes"`
+	ID             int            `db:"id"`
+	SongID         int            `db:"song_id"`
+	DifficultyID   int            `db:"difficulty_id"`
+	Const          float64        `db:"const"`
+	IsConstUnknown bool           `db:"is_const_unknown"`
+	Notes          sql.NullInt64  `db:"notes"`
+	NotesDesigner  sql.NullString `db:"notes_designer"`
 }
 
 type workspaceWorldsendChart struct {
@@ -289,6 +292,7 @@ type mysqlChart struct {
 	Const          float64
 	IsConstUnknown bool
 	Notes          sql.NullInt64
+	NotesDesigner  sql.NullString
 }
 
 type mysqlWorldsendChart struct {
@@ -347,7 +351,7 @@ func loadMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor) (map[strin
 }
 
 func loadMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor) (map[string]mysqlChart, error) {
-	rows, err := mysql.QueryContext(ctx, `SELECT song_id, difficulty_id, const, is_const_unknown, notes FROM charts`)
+	rows, err := mysql.QueryContext(ctx, `SELECT song_id, difficulty_id, const, is_const_unknown, notes, notes_designer FROM charts`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load mysql charts: %w", err)
 	}
@@ -356,7 +360,7 @@ func loadMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor) (map[stri
 	result := make(map[string]mysqlChart)
 	for rows.Next() {
 		var rec mysqlChart
-		if err := rows.Scan(&rec.SongID, &rec.DifficultyID, &rec.Const, &rec.IsConstUnknown, &rec.Notes); err != nil {
+		if err := rows.Scan(&rec.SongID, &rec.DifficultyID, &rec.Const, &rec.IsConstUnknown, &rec.Notes, &rec.NotesDesigner); err != nil {
 			return nil, fmt.Errorf("failed to scan mysql chart: %w", err)
 		}
 		result[chartKey(rec.SongID, rec.DifficultyID)] = rec
@@ -394,6 +398,7 @@ type chartUpdateRecord struct {
 	Const         float64
 	TargetUnknown bool
 	Notes         sql.NullInt64
+	NotesDesigner sql.NullString
 }
 
 // bulkUpdateMySQLCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
@@ -417,6 +422,12 @@ SET
 		WHEN song_id = ? AND difficulty_id = ? THEN ?
 		{{- end }}
 		ELSE notes
+	END,
+	notes_designer = CASE
+		{{- range .Records }}
+		WHEN song_id = ? AND difficulty_id = ? THEN ?
+		{{- end }}
+		ELSE notes_designer
 	END
 WHERE (song_id, difficulty_id) IN ({{ .Placeholders }})
 `))
@@ -455,6 +466,9 @@ func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 		}
 		for _, rec := range chunk { // notes
 			args = append(args, rec.SongID, rec.DifficultyID, nullableInt(rec.Notes))
+		}
+		for _, rec := range chunk { // notes_designer
+			args = append(args, rec.SongID, rec.DifficultyID, nullableString(rec.NotesDesigner))
 		}
 		for _, rec := range chunk { // WHERE IN
 			args = append(args, rec.SongID, rec.DifficultyID)
@@ -560,7 +574,7 @@ const (
 	majorUpdateLevelRange     = 0.5
 )
 
-func resolveChartUpdate(existing mysqlChart, exists bool, chart workspaceChart, opts SyncOptions) (float64, bool, sql.NullInt64, syncAction) {
+func resolveChartUpdate(existing mysqlChart, exists bool, chart workspaceChart, opts SyncOptions) (float64, bool, sql.NullInt64, sql.NullString, syncAction) {
 	if !exists {
 		// 挿入ロジック
 		tConst := chart.Const
@@ -572,13 +586,14 @@ func resolveChartUpdate(existing mysqlChart, exists bool, chart workspaceChart, 
 				tUnknown = true
 			}
 		}
-		return tConst, tUnknown, chart.Notes, actionInsert
+		return tConst, tUnknown, chart.Notes, chart.NotesDesigner, actionInsert
 	}
 
 	// 更新ロジック
 	finalConst := existing.Const
 	finalUnknown := existing.IsConstUnknown
 	finalNotes := existing.Notes
+	finalNotesDesigner := existing.NotesDesigner
 	shouldUpdate := false
 
 	if opts.MajorUpdate {
@@ -608,6 +623,9 @@ func resolveChartUpdate(existing mysqlChart, exists bool, chart workspaceChart, 
 			if !existing.Notes.Valid && chart.Notes.Valid {
 				shouldUpdate = true
 			}
+			if !existing.NotesDesigner.Valid && chart.NotesDesigner.Valid {
+				shouldUpdate = true
+			}
 		}
 	} else {
 		// 通常ロジック
@@ -626,6 +644,9 @@ func resolveChartUpdate(existing mysqlChart, exists bool, chart workspaceChart, 
 				if !existing.Notes.Valid && chart.Notes.Valid {
 					shouldUpdate = true
 				}
+				if !existing.NotesDesigner.Valid && chart.NotesDesigner.Valid {
+					shouldUpdate = true
+				}
 			}
 		}
 	}
@@ -638,11 +659,14 @@ func resolveChartUpdate(existing mysqlChart, exists bool, chart workspaceChart, 
 	if !existing.Notes.Valid && chart.Notes.Valid {
 		finalNotes = chart.Notes
 	}
+	if !existing.NotesDesigner.Valid && chart.NotesDesigner.Valid {
+		finalNotesDesigner = chart.NotesDesigner
+	}
 
 	if shouldUpdate {
-		return finalConst, finalUnknown, finalNotes, actionUpdate
+		return finalConst, finalUnknown, finalNotes, finalNotesDesigner, actionUpdate
 	}
-	return finalConst, finalUnknown, finalNotes, actionSkip
+	return finalConst, finalUnknown, finalNotes, finalNotesDesigner, actionSkip
 }
 
 func chartKey(songID, difficultyID int) string {
@@ -740,6 +764,7 @@ type chartInsertRecord struct {
 	Const         float64
 	TargetUnknown bool
 	Notes         sql.NullInt64
+	NotesDesigner sql.NullString
 }
 
 func bulkInsertMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []chartInsertRecord, chunkSize int) error {
@@ -751,7 +776,7 @@ func bulkInsertMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 		chunkSize = len(records)
 	}
 
-	const queryPrefix = "INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes) VALUES "
+	const queryPrefix = "INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes, notes_designer) VALUES "
 	const querySuffix = ` ON DUPLICATE KEY UPDATE
         const = CASE
                 WHEN is_const_unknown = 0 THEN const
@@ -761,22 +786,24 @@ func bulkInsertMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
                 WHEN is_const_unknown = 0 AND VALUES(is_const_unknown) = 1 THEN 0
                 ELSE VALUES(is_const_unknown)
         END,
-        notes = COALESCE(VALUES(notes), notes)`
+        notes = COALESCE(VALUES(notes), notes),
+        notes_designer = COALESCE(notes_designer, VALUES(notes_designer))`
 
 	for start := 0; start < len(records); start += chunkSize {
 		end := min(start+chunkSize, len(records))
 
 		chunk := records[start:end]
 		values := make([]string, len(chunk))
-		args := make([]any, 0, len(chunk)*5)
+		args := make([]any, 0, len(chunk)*6)
 		for i, rec := range chunk {
-			values[i] = "(?, ?, ?, ?, ?)"
+			values[i] = "(?, ?, ?, ?, ?, ?)"
 			args = append(args,
 				rec.SongID,
 				rec.DifficultyID,
 				rec.Const,
 				util.BoolToInt(rec.TargetUnknown),
 				nullableInt(rec.Notes),
+				nullableString(rec.NotesDesigner),
 			)
 		}
 

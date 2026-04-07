@@ -22,5 +22,6 @@ type St1027Meta struct {
 
 // St1027Chart はst1027の単一の譜面データを表します（ノーツ数のみ参照）
 type St1027Chart struct {
-	NotesAll *int `json:"notes_all"`
+	NotesAll      *int    `json:"notes_all"`
+	Notesdesigner *string `json:"notesdesigner"`
 }

@@ -47,6 +47,9 @@ func (c *St1027Consolidator) Consolidate(ctx context.Context) error {
 	if err := c.bulkUpdateChartNotes(ctx, officialMap); err != nil {
 		return err
 	}
+	if err := c.bulkUpdateChartNotesDesigner(ctx, officialMap); err != nil {
+		return err
+	}
 
 	slog.Info("St1027 data consolidation completed")
 	return nil
@@ -97,5 +100,57 @@ func (c *St1027Consolidator) bulkUpdateChartNotes(ctx context.Context, officialM
 	}
 
 	slog.Info("St1027 chart notes updated", "count", totalAffected)
+	return nil
+}
+
+func (c *St1027Consolidator) bulkUpdateChartNotesDesigner(ctx context.Context, officialMap map[string]int) error {
+	var records []ChartNotesDesignerRecord
+	for _, song := range c.data.Songs {
+		officialID := strings.TrimSpace(song.Meta.OfficialID)
+		if officialID == "" {
+			continue
+		}
+		songID, exists := officialMap[officialID]
+		if !exists {
+			continue
+		}
+
+		chartsToProcess := map[string]importer.St1027Chart{
+			difficultyBasic:    song.Basic,
+			difficultyAdvanced: song.Advanced,
+			difficultyExpert:   song.Expert,
+			difficultyMaster:   song.Master,
+			difficultyUltima:   song.Ultima,
+		}
+
+		for name, chart := range chartsToProcess {
+			diffID := difficulty.ParseName(name).Int()
+			if diffID == 0 || chart.Notesdesigner == nil {
+				continue
+			}
+
+			notesDesigner := strings.TrimSpace(*chart.Notesdesigner)
+			if notesDesigner == "" {
+				continue
+			}
+
+			records = append(records, ChartNotesDesignerRecord{
+				SongID:        songID,
+				DifficultyID:  diffID,
+				NotesDesigner: notesDesigner,
+			})
+		}
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	totalAffected, err := BulkUpdateChartNotesDesignerInBatches(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("St1027 chart notes_designer updated", "count", totalAffected)
 	return nil
 }

@@ -445,7 +445,7 @@ func TestResolveChartUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, u, n, a := resolveChartUpdate(tt.existing, tt.exists, tt.chart, tt.opts)
+			c, u, n, _, a := resolveChartUpdate(tt.existing, tt.exists, tt.chart, tt.opts)
 			if c != tt.expectedConst {
 				t.Errorf("const mismatch: got %v, want %v", c, tt.expectedConst)
 			}

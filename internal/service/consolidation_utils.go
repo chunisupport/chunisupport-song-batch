@@ -23,6 +23,13 @@ type ChartNotesRecord struct {
 	Notes        int `db:"notes"`
 }
 
+// ChartNotesDesignerRecord は notes_designer の一括更新に使用される内部レコードです。
+type ChartNotesDesignerRecord struct {
+	SongID        int    `db:"song_id"`
+	DifficultyID  int    `db:"difficulty_id"`
+	NotesDesigner string `db:"notes_designer"`
+}
+
 // bulkUpdateChartNotesTpl は notes の一括更新用テンプレートです。
 // SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使います。
 // 差分検知により、既存の notes を 0 や null で上書きしないようにします。
@@ -46,6 +53,35 @@ WHERE EXISTS (
 	  AND t.new_notes > 0
 )
 `))
+
+// bulkUpdateChartNotesDesignerTpl は notes_designer の一括更新用テンプレートです。
+// 未設定(nullまたは空文字)のレコードにのみ譜面製作者を補完します。
+var bulkUpdateChartNotesDesignerTpl = template.Must(template.New("bulkUpdateChartNotesDesigner").Funcs(template.FuncMap{
+	"sqlString": escapeSQLiteStringLiteral,
+}).Parse(`
+UPDATE charts SET notes_designer = CASE
+	{{- range .}}
+	WHEN song_id = {{.SongID}} AND difficulty_id = {{.DifficultyID}} THEN '{{sqlString .NotesDesigner}}'
+	{{- end}}
+	ELSE notes_designer
+END
+WHERE EXISTS (
+	SELECT 1 FROM (
+		{{- range $i, $e := .}}
+		{{- if $i}} UNION ALL{{end}}
+		SELECT {{.SongID}} AS song_id, {{.DifficultyID}} AS difficulty_id, '{{sqlString .NotesDesigner}}' AS new_notes_designer
+		{{- end}}
+	) AS t
+	WHERE charts.song_id = t.song_id
+	  AND charts.difficulty_id = t.difficulty_id
+	  AND charts.notes_designer IS NULL
+	  AND t.new_notes_designer <> ''
+)
+`))
+
+func escapeSQLiteStringLiteral(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
 
 // NewConsolidationUtils は集約処理向けのユーティリティを初期化します。
 func NewConsolidationUtils(db *sqlx.DB) *ConsolidationUtils {
@@ -207,6 +243,50 @@ func BulkUpdateChartNotesInBatches(ctx context.Context, db sqlx.ExtContext, reco
 		affected, err := ExecuteBulkUpdateChartNotes(ctx, db, batch)
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to execute bulk update for batch range [%d:%d): %w", i, end, err)
+		}
+		totalAffected += affected
+	}
+
+	return totalAffected, nil
+}
+
+// ExecuteBulkUpdateChartNotesDesigner は charts テーブルの notes_designer を1バッチ分まとめて更新します。
+func ExecuteBulkUpdateChartNotesDesigner(ctx context.Context, db sqlx.ExtContext, records []ChartNotesDesignerRecord) (int64, error) {
+	var buf bytes.Buffer
+	if err := bulkUpdateChartNotesDesignerTpl.Execute(&buf, records); err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update chart notes_designer template: %w", err)
+	}
+
+	result, err := db.ExecContext(ctx, buf.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update chart notes_designer: %w", err)
+	}
+
+	return result.RowsAffected()
+}
+
+// BulkUpdateChartNotesDesignerInBatches は notes_designer をバッチに分割して一括更新します。
+func BulkUpdateChartNotesDesignerInBatches(ctx context.Context, db sqlx.ExtContext, records []ChartNotesDesignerRecord) (int64, error) {
+	if len(records) == 0 {
+		return 0, nil
+	}
+
+	if info.SQLiteCompoundSelectLimit <= 0 {
+		return 0, fmt.Errorf("invalid SQLiteCompoundSelectLimit: %d", info.SQLiteCompoundSelectLimit)
+	}
+
+	var totalAffected int64
+	for i := 0; i < len(records); i += info.SQLiteCompoundSelectLimit {
+		if err := ctx.Err(); err != nil {
+			return totalAffected, err
+		}
+
+		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
+		batch := records[i:end]
+
+		affected, err := ExecuteBulkUpdateChartNotesDesigner(ctx, db, batch)
+		if err != nil {
+			return totalAffected, fmt.Errorf("failed to execute bulk update notes_designer for batch range [%d:%d): %w", i, end, err)
 		}
 		totalAffected += affected
 	}
