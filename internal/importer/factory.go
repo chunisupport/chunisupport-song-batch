@@ -17,8 +17,6 @@ func (f *ImporterFactory) CreateImporter(dataSourceType DataSourceType) (Importe
 	switch dataSourceType {
 	case DataSourceOfficial:
 		return NewOfficialImporter(), nil
-	case DataSourceNatua:
-		return NewNatuaImporter(), nil
 	case DataSourceMainframe:
 		return NewMainframeImporter(), nil
 	case DataSourceOtogeDb:
@@ -38,7 +36,6 @@ func (f *ImporterFactory) GetSupportedDataSources() []DataSourceType {
 		DataSourceOfficial,
 		DataSourceAdditionalSongs,
 		DataSourceSt1027,
-		DataSourceNatua,
 		DataSourceMainframe,
 		DataSourceOtogeDb,
 	}

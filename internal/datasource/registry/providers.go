@@ -12,7 +12,6 @@ import (
 func init() {
 	Register("official", officialProvider)
 	Register("additional_songs", additionalSongsProvider)
-	Register("natua", natuaProvider)
 	Register("st1027", st1027Provider)
 	Register("mainframe", mainframeProvider)
 	Register("otoge_db", otogeDbProvider)
@@ -25,17 +24,6 @@ func officialProvider() (Definition, error) {
 	}
 	return Definition{
 		Type: "official",
-		URL:  url,
-	}, nil
-}
-
-func natuaProvider() (Definition, error) {
-	url, err := requireNonEmptyEnv(info.ENV_NATUA_URL)
-	if err != nil {
-		return Definition{}, err
-	}
-	return Definition{
-		Type: "natua",
 		URL:  url,
 	}, nil
 }

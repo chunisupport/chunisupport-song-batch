@@ -18,6 +18,7 @@ type St1027Song struct {
 // St1027Meta はst1027の楽曲のメタデータを表します（ノーツ数補完に必要な最小限のフィールド）
 type St1027Meta struct {
 	OfficialID string `json:"official_id"`
+	BPM        *int   `json:"bpm"`
 }
 
 // St1027Chart はst1027の単一の譜面データを表します（ノーツ数のみ参照）

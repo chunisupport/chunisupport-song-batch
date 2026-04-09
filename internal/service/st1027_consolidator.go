@@ -50,6 +50,9 @@ func (c *St1027Consolidator) Consolidate(ctx context.Context) error {
 	if err := c.bulkUpdateChartNotesDesigner(ctx, officialMap); err != nil {
 		return err
 	}
+	if err := c.bulkUpdateSongBPMs(ctx, officialMap); err != nil {
+		return err
+	}
 
 	slog.Info("St1027 data consolidation completed")
 	return nil
@@ -152,5 +155,36 @@ func (c *St1027Consolidator) bulkUpdateChartNotesDesigner(ctx context.Context, o
 	}
 
 	slog.Info("St1027 chart notes_designer updated", "count", totalAffected)
+	return nil
+}
+
+func (c *St1027Consolidator) bulkUpdateSongBPMs(ctx context.Context, officialMap map[string]int) error {
+	var records []SongBPMRecord
+	for _, song := range c.data.Songs {
+		officialID := strings.TrimSpace(song.Meta.OfficialID)
+		if officialID == "" {
+			continue
+		}
+		songID, exists := officialMap[officialID]
+		if !exists {
+			continue
+		}
+		if song.Meta.BPM == nil || *song.Meta.BPM <= 0 {
+			continue
+		}
+
+		records = append(records, SongBPMRecord{ID: songID, BPM: *song.Meta.BPM})
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	affected, err := ExecuteBulkUpdateSongBPMs(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("St1027 songs bpm updated", "count", affected)
 	return nil
 }

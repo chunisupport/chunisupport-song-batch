@@ -30,6 +30,11 @@ type ChartNotesDesignerRecord struct {
 	NotesDesigner string `db:"notes_designer"`
 }
 
+type SongBPMRecord struct {
+	ID  int `db:"id"`
+	BPM int `db:"bpm"`
+}
+
 // bulkUpdateChartNotesTpl は notes の一括更新用テンプレートです。
 // SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使います。
 // 差分検知により、既存の notes を 0 や null で上書きしないようにします。
@@ -77,6 +82,19 @@ WHERE EXISTS (
 	  AND charts.notes_designer IS NULL
 	  AND t.new_notes_designer <> ''
 )
+`))
+
+var bulkUpdateSongBPMsTpl = template.Must(template.New("bulkUpdateSongBPMs").Parse(`
+UPDATE songs SET bpm = CASE id
+	{{- range .}}
+	WHEN {{.ID}} THEN {{.BPM}}
+	{{- end}}
+END
+WHERE id IN (
+	{{- range $i, $e := .}}
+	{{- if $i}},{{end}}{{.ID}}
+	{{- end -}}
+) AND (bpm IS NULL OR bpm = 0)
 `))
 
 func escapeSQLiteStringLiteral(value string) string {
@@ -292,4 +310,18 @@ func BulkUpdateChartNotesDesignerInBatches(ctx context.Context, db sqlx.ExtConte
 	}
 
 	return totalAffected, nil
+}
+
+func ExecuteBulkUpdateSongBPMs(ctx context.Context, db sqlx.ExtContext, records []SongBPMRecord) (int64, error) {
+	var buf bytes.Buffer
+	if err := bulkUpdateSongBPMsTpl.Execute(&buf, records); err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update song bpms template: %w", err)
+	}
+
+	result, err := db.ExecContext(ctx, buf.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update song bpms: %w", err)
+	}
+
+	return result.RowsAffected()
 }

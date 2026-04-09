@@ -168,12 +168,6 @@ func importDataByDatasources(datasources []datasource.Datasource) (service.Conso
 			} else {
 				return sources, fmt.Errorf("unexpected data type for official datasource: %T", result.Data)
 			}
-		case importer.DataSourceNatua:
-			if data, ok := result.Data.(*importer.NatuaData); ok {
-				sources.Natua = data
-			} else {
-				return sources, fmt.Errorf("unexpected data type for natua datasource: %T", result.Data)
-			}
 		case importer.DataSourceSt1027:
 			if data, ok := result.Data.(*importer.St1027Data); ok {
 				sources.St1027 = data

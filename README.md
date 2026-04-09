@@ -58,7 +58,6 @@ FLUSH PRIVILEGES;
 | `DB_USER` | MySQL ユーザー |
 | `DB_PASS` | MySQL パスワード |
 | `CHUNISUPPORT_BATCH_OFFICIAL_URL` | 公式データソースのダウンロード URL |
-| `CHUNISUPPORT_BATCH_NATUA_URL` | Natua データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_ST1027_URL` | st1027 データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_OTOGE_DB_URL` | otoge-db データソースのダウンロード URL（リリース日補完用） |
 | `CHUNISUPPORT_BATCH_GOOGLE_CLOUD_API_KEY` | mainframe データソースの Google API キー |

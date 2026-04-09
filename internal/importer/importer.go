@@ -11,19 +11,17 @@ type DataSourceType string
 const (
 	// DataSourceOfficial は公式のデータソースです
 	DataSourceOfficial DataSourceType = "official"
-	// DataSourceNatua はnatua.devのデータソースです
-	DataSourceNatua DataSourceType = "natua"
 	// DataSourceMainframe はMainframeのデータソースです
 	DataSourceMainframe DataSourceType = "mainframe"
 	// DataSourceOtogeDb はotoge-dbのデータソースです
 	DataSourceOtogeDb DataSourceType = "otoge_db"
-	// DataSourceAdditionalSongs は追加楽曲のデータソースです
+	// DataSourceAdditionalSongs は追加楽曲データソースです
 	DataSourceAdditionalSongs DataSourceType = "additional_songs"
-	// DataSourceSt1027 はst1027のノーツ数補完用データソースです
+	// DataSourceSt1027 はst1027のデータソースです
 	DataSourceSt1027 DataSourceType = "st1027"
 )
 
-// ImportResult はインポート処理の結果を表します
+// ImportResult はインポート結果を表します
 type ImportResult struct {
 	Type DataSourceType
 	Data any

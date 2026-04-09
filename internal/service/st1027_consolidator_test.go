@@ -8,7 +8,6 @@ import (
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
-// TestSt1027BulkUpdateChartNotes_InitialInsert は notes が NULL の場合に正しく更新されることを確認
 func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 	t.Parallel()
 
@@ -21,7 +20,6 @@ func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 	}
 	defer ws.Close()
 
-	// テスト用の楽曲と譜面を挿入
 	_, err = ws.DB().ExecContext(ctx, `
 		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
 		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
@@ -38,7 +36,6 @@ func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 		t.Fatalf("failed to insert test charts: %v", err)
 	}
 
-	// st1027 データを準備
 	st1027Data := &importer.St1027Data{
 		Songs: []importer.St1027Song{
 			{
@@ -62,7 +59,6 @@ func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 		t.Fatalf("bulkUpdateChartNotes returned error: %v", err)
 	}
 
-	// 検証
 	var notes1, notes2 *int
 	err = ws.DB().GetContext(ctx, &notes1, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 1`)
 	if err != nil {
@@ -81,7 +77,6 @@ func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 	}
 }
 
-// TestSt1027BulkUpdateChartNotes_NoUpdateExisting は既存の notes が上書きされないことを確認
 func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 	t.Parallel()
 
@@ -94,7 +89,6 @@ func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 	}
 	defer ws.Close()
 
-	// テスト用の楽曲と譜面を挿入（既に notes が設定されている）
 	_, err = ws.DB().ExecContext(ctx, `
 		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
 		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
@@ -111,7 +105,6 @@ func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 		t.Fatalf("failed to insert test charts: %v", err)
 	}
 
-	// st1027 データ: 異なる notes 値を持つ
 	st1027Data := &importer.St1027Data{
 		Songs: []importer.St1027Song{
 			{
@@ -135,7 +128,6 @@ func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 		t.Fatalf("bulkUpdateChartNotes returned error: %v", err)
 	}
 
-	// 検証: 更新されていないべき
 	var notes1, notes2 *int
 	err = ws.DB().GetContext(ctx, &notes1, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 1`)
 	if err != nil {
@@ -154,7 +146,6 @@ func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 	}
 }
 
-// TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero は 0 や null で上書きしないことを確認
 func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 	t.Parallel()
 
@@ -167,7 +158,6 @@ func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 	}
 	defer ws.Close()
 
-	// テスト用の楽曲と譜面を挿入（既に正の notes が設定されている）
 	_, err = ws.DB().ExecContext(ctx, `
 		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
 		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
@@ -184,7 +174,6 @@ func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 		t.Fatalf("failed to insert test charts: %v", err)
 	}
 
-	// st1027 データ: notes_all が 0 と null（上書きしないべき）
 	st1027Data := &importer.St1027Data{
 		Songs: []importer.St1027Song{
 			{
@@ -207,7 +196,6 @@ func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 		t.Fatalf("bulkUpdateChartNotes returned error: %v", err)
 	}
 
-	// 検証: 500 のまま維持されているべき
 	var notes *int
 	err = ws.DB().GetContext(ctx, &notes, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 1`)
 	if err != nil {
@@ -219,7 +207,165 @@ func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 	}
 }
 
-// TestSt1027BulkUpdateChartNotesDesigner_InitialInsert は notes_designer が NULL の場合に正しく更新されることを確認
+func TestSt1027BulkUpdateSongBPMs_InitialInsert(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	defer ws.Close()
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted, bpm)
+		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0, NULL)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test song: %v", err)
+	}
+
+	st1027Data := &importer.St1027Data{
+		Songs: []importer.St1027Song{
+			{
+				Meta: importer.St1027Meta{
+					OfficialID: "OFF001",
+					BPM:        ptr(180),
+				},
+			},
+		},
+	}
+
+	consolidator := &St1027Consolidator{
+		workspace: ws,
+		data:      st1027Data,
+	}
+
+	officialMap := map[string]int{"OFF001": 1}
+	err = consolidator.bulkUpdateSongBPMs(ctx, officialMap)
+	if err != nil {
+		t.Fatalf("bulkUpdateSongBPMs returned error: %v", err)
+	}
+
+	var bpm *int
+	err = ws.DB().GetContext(ctx, &bpm, `SELECT bpm FROM songs WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to get bpm for song: %v", err)
+	}
+
+	if bpm == nil || *bpm != 180 {
+		t.Errorf("expected bpm=180, got %v", bpm)
+	}
+}
+
+func TestSt1027BulkUpdateSongBPMs_NoOverwriteExisting(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	defer ws.Close()
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted, bpm)
+		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0, 160)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test song: %v", err)
+	}
+
+	st1027Data := &importer.St1027Data{
+		Songs: []importer.St1027Song{
+			{
+				Meta: importer.St1027Meta{
+					OfficialID: "OFF001",
+					BPM:        ptr(180),
+				},
+			},
+		},
+	}
+
+	consolidator := &St1027Consolidator{
+		workspace: ws,
+		data:      st1027Data,
+	}
+
+	officialMap := map[string]int{"OFF001": 1}
+	err = consolidator.bulkUpdateSongBPMs(ctx, officialMap)
+	if err != nil {
+		t.Fatalf("bulkUpdateSongBPMs returned error: %v", err)
+	}
+
+	var bpm *int
+	err = ws.DB().GetContext(ctx, &bpm, `SELECT bpm FROM songs WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to get bpm for song: %v", err)
+	}
+
+	if bpm == nil || *bpm != 160 {
+		t.Errorf("expected bpm to remain 160 (not overwritten), got %v", bpm)
+	}
+}
+
+func TestSt1027BulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	defer ws.Close()
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted, bpm)
+		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0, 180)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test song: %v", err)
+	}
+
+	st1027Data := &importer.St1027Data{
+		Songs: []importer.St1027Song{
+			{
+				Meta: importer.St1027Meta{
+					OfficialID: "OFF001",
+					BPM:        ptr(0),
+				},
+			},
+		},
+	}
+
+	consolidator := &St1027Consolidator{
+		workspace: ws,
+		data:      st1027Data,
+	}
+
+	officialMap := map[string]int{"OFF001": 1}
+	err = consolidator.bulkUpdateSongBPMs(ctx, officialMap)
+	if err != nil {
+		t.Fatalf("bulkUpdateSongBPMs returned error: %v", err)
+	}
+
+	var bpm *int
+	err = ws.DB().GetContext(ctx, &bpm, `SELECT bpm FROM songs WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to get bpm for song: %v", err)
+	}
+
+	if bpm == nil || *bpm != 180 {
+		t.Errorf("expected bpm to remain 180 (not overwritten by 0), got %v", bpm)
+	}
+}
+
 func TestSt1027BulkUpdateChartNotesDesigner_InitialInsert(t *testing.T) {
 	t.Parallel()
 
@@ -289,7 +435,6 @@ func TestSt1027BulkUpdateChartNotesDesigner_InitialInsert(t *testing.T) {
 	}
 }
 
-// TestSt1027BulkUpdateChartNotesDesigner_NoUpdateExisting は既存の notes_designer が上書きされないことを確認
 func TestSt1027BulkUpdateChartNotesDesigner_NoUpdateExisting(t *testing.T) {
 	t.Parallel()
 
