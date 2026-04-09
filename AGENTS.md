@@ -1,5 +1,10 @@
 # AGENTS.md 運用ガイドライン
 
+## 最重要
+
+- すべてのファイルはUTF-8エンコードで記述されています。Powershell環境から開く際は-Encoding utf8 -Raw オプションを使用してファイルを読み書きしてください。
+- 例: `Get-Content -Path "path/to/file" -Encoding utf8 -Raw`
+
 ## 基本ルール
 
 - テストケースは明確な理由を説明できない・もしくは指示のない限り絶対に変更・削除してはいけません。
