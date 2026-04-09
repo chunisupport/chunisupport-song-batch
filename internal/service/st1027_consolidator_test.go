@@ -366,6 +366,82 @@ func TestSt1027BulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
 	}
 }
 
+func TestSt1027Consolidator_Consolidate_FullFlow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	defer ws.Close()
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted, bpm)
+		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0, NULL)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test song: %v", err)
+	}
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes, notes_designer)
+		VALUES (1, 3, 12.5, 0, NULL, NULL)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test chart: %v", err)
+	}
+
+	st1027Data := &importer.St1027Data{
+		Songs: []importer.St1027Song{
+			{
+				Meta: importer.St1027Meta{
+					OfficialID: "OFF001",
+					BPM:        ptr(180),
+				},
+				Expert: importer.St1027Chart{
+					NotesAll:      ptr(900),
+					Notesdesigner: ptrString("Techno Kitchen"),
+				},
+			},
+		},
+	}
+
+	consolidator := NewSt1027Consolidator(ws, st1027Data)
+	if err := consolidator.Consolidate(ctx); err != nil {
+		t.Fatalf("Consolidate returned error: %v", err)
+	}
+
+	var bpm *int
+	err = ws.DB().GetContext(ctx, &bpm, `SELECT bpm FROM songs WHERE id = 1`)
+	if err != nil {
+		t.Fatalf("failed to get bpm for song: %v", err)
+	}
+	if bpm == nil || *bpm != 180 {
+		t.Errorf("expected bpm=180, got %v", bpm)
+	}
+
+	var notes *int
+	err = ws.DB().GetContext(ctx, &notes, `SELECT notes FROM charts WHERE song_id = 1 AND difficulty_id = 3`)
+	if err != nil {
+		t.Fatalf("failed to get notes for chart: %v", err)
+	}
+	if notes == nil || *notes != 900 {
+		t.Errorf("expected notes=900, got %v", notes)
+	}
+
+	var designer *string
+	err = ws.DB().GetContext(ctx, &designer, `SELECT notes_designer FROM charts WHERE song_id = 1 AND difficulty_id = 3`)
+	if err != nil {
+		t.Fatalf("failed to get notes_designer for chart: %v", err)
+	}
+	if designer == nil || *designer != "Techno Kitchen" {
+		t.Errorf("expected notes_designer=Techno Kitchen, got %v", designer)
+	}
+}
+
 func TestSt1027BulkUpdateChartNotesDesigner_InitialInsert(t *testing.T) {
 	t.Parallel()
 
