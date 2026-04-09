@@ -62,5 +62,6 @@ CREATE TABLE IF NOT EXISTS worldsend_charts (
     level_star INTEGER CHECK(level_star IS NULL OR level_star BETWEEN 1 AND 5),
     attribute TEXT CHECK(LENGTH(attribute) <= 1),
     notes INTEGER CHECK(notes IS NULL OR notes >= 0),
+    notes_designer TEXT,
     FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE
 );

@@ -39,6 +39,16 @@ func (c *OtogeDbConsolidator) Consolidate(ctx context.Context) error {
 		return err
 	}
 
+	if err := c.bulkUpdateSongBPMs(ctx, idxMap); err != nil {
+		return err
+	}
+	if err := c.bulkUpdateWorldsendChartNotes(ctx, idxMap); err != nil {
+		return err
+	}
+	if err := c.bulkUpdateWorldsendChartNotesDesigner(ctx, idxMap); err != nil {
+		return err
+	}
+
 	var updated int
 	for _, song := range *c.data {
 		dateAdded := strings.TrimSpace(song.DateAdded)
@@ -86,6 +96,131 @@ WHERE id = ? AND released_at IS NULL
 
 	slog.Info("Otoge-db release dates updated", "count", updated)
 	return nil
+}
+
+func (c *OtogeDbConsolidator) bulkUpdateSongBPMs(ctx context.Context, idxMap map[int]int) error {
+	var records []SongBPMRecord
+	for _, song := range *c.data {
+		if !hasWorldsEndMetadata(song) {
+			continue
+		}
+
+		songID, bpm, ok := c.extractSongIDAndPositiveInt(song.ID, song.BPM, idxMap)
+		if !ok {
+			continue
+		}
+
+		records = append(records, SongBPMRecord{
+			ID:  songID,
+			BPM: bpm,
+		})
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	affected, err := ExecuteBulkUpdateSongBPMs(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return fmt.Errorf("failed to bulk update otoge-db song bpms: %w", err)
+	}
+
+	slog.Info("Otoge-db songs bpm updated", "count", affected)
+	return nil
+}
+
+func (c *OtogeDbConsolidator) bulkUpdateWorldsendChartNotes(ctx context.Context, idxMap map[int]int) error {
+	var records []WorldsendChartNotesRecord
+	for _, song := range *c.data {
+		songID, notes, ok := c.extractSongIDAndPositiveInt(song.ID, song.LevWENotes, idxMap)
+		if !ok {
+			continue
+		}
+
+		records = append(records, WorldsendChartNotesRecord{
+			SongID: songID,
+			Notes:  notes,
+		})
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	affected, err := BulkUpdateWorldsendChartNotesInBatches(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return fmt.Errorf("failed to bulk update otoge-db WORLD'S END chart notes: %w", err)
+	}
+
+	slog.Info("Otoge-db WORLD'S END chart notes updated", "count", affected)
+	return nil
+}
+
+func (c *OtogeDbConsolidator) bulkUpdateWorldsendChartNotesDesigner(ctx context.Context, idxMap map[int]int) error {
+	var records []WorldsendChartNotesDesignerRecord
+	for _, song := range *c.data {
+		songID, ok := c.extractSongID(song.ID, idxMap)
+		if !ok {
+			continue
+		}
+
+		notesDesigner := strings.TrimSpace(song.LevWEDesigner)
+		if notesDesigner == "" {
+			continue
+		}
+
+		records = append(records, WorldsendChartNotesDesignerRecord{
+			SongID:        songID,
+			NotesDesigner: notesDesigner,
+		})
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	affected, err := BulkUpdateWorldsendChartNotesDesignerInBatches(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return fmt.Errorf("failed to bulk update otoge-db WORLD'S END chart notes_designer: %w", err)
+	}
+
+	slog.Info("Otoge-db WORLD'S END chart notes_designer updated", "count", affected)
+	return nil
+}
+
+func (c *OtogeDbConsolidator) extractSongID(idStr string, idxMap map[int]int) (int, bool) {
+	id, err := strconv.Atoi(strings.TrimSpace(idStr))
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+
+	songID, exists := idxMap[id]
+	if !exists {
+		return 0, false
+	}
+
+	return songID, true
+}
+
+func (c *OtogeDbConsolidator) extractSongIDAndPositiveInt(idStr, value string, idxMap map[int]int) (int, int, bool) {
+	songID, ok := c.extractSongID(idStr, idxMap)
+	if !ok {
+		return 0, 0, false
+	}
+
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n <= 0 {
+		return 0, 0, false
+	}
+
+	return songID, n, true
+}
+
+func hasWorldsEndMetadata(song importer.OtogeDbSong) bool {
+	return strings.TrimSpace(song.WeKanji) != "" ||
+		strings.TrimSpace(song.WeStar) != "" ||
+		strings.TrimSpace(song.LevWENotes) != "" ||
+		strings.TrimSpace(song.LevWEDesigner) != ""
 }
 
 func (c *OtogeDbConsolidator) buildIdxMap(ctx context.Context) (map[int]int, error) {

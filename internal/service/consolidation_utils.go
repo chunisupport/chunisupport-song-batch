@@ -35,6 +35,18 @@ type SongBPMRecord struct {
 	BPM int `db:"bpm"`
 }
 
+// WorldsendChartNotesRecord は worldsend_charts.notes の一括更新に使用される内部レコードです。
+type WorldsendChartNotesRecord struct {
+	SongID int `db:"song_id"`
+	Notes  int `db:"notes"`
+}
+
+// WorldsendChartNotesDesignerRecord は worldsend_charts.notes_designer の一括更新に使用される内部レコードです。
+type WorldsendChartNotesDesignerRecord struct {
+	SongID        int    `db:"song_id"`
+	NotesDesigner string `db:"notes_designer"`
+}
+
 // bulkUpdateChartNotesTpl は notes の一括更新用テンプレートです。
 // SQLiteでは UPDATE ... FROM 構文が使えないため、CASE を使います。
 // 差分検知により、既存の notes を 0 や null で上書きしないようにします。
@@ -95,6 +107,36 @@ WHERE id IN (
 	{{- if $i}},{{end}}{{.ID}}
 	{{- end -}}
 ) AND (bpm IS NULL OR bpm = 0)
+`))
+
+var bulkUpdateWorldsendChartNotesTpl = template.Must(template.New("bulkUpdateWorldsendChartNotes").Parse(`
+UPDATE worldsend_charts SET notes = CASE song_id
+	{{- range .}}
+	WHEN {{.SongID}} THEN {{.Notes}}
+	{{- end}}
+	ELSE notes
+END
+WHERE song_id IN (
+	{{- range $i, $e := .}}
+	{{- if $i}},{{end}}{{.SongID}}
+	{{- end -}}
+) AND (notes IS NULL OR notes = 0)
+`))
+
+var bulkUpdateWorldsendChartNotesDesignerTpl = template.Must(template.New("bulkUpdateWorldsendChartNotesDesigner").Funcs(template.FuncMap{
+	"sqlString": escapeSQLiteStringLiteral,
+}).Parse(`
+UPDATE worldsend_charts SET notes_designer = CASE song_id
+	{{- range .}}
+	WHEN {{.SongID}} THEN '{{sqlString .NotesDesigner}}'
+	{{- end}}
+	ELSE notes_designer
+END
+WHERE song_id IN (
+	{{- range $i, $e := .}}
+	{{- if $i}},{{end}}{{.SongID}}
+	{{- end -}}
+) AND (notes_designer IS NULL OR notes_designer = '')
 `))
 
 func escapeSQLiteStringLiteral(value string) string {
@@ -324,4 +366,92 @@ func ExecuteBulkUpdateSongBPMs(ctx context.Context, db sqlx.ExtContext, records 
 	}
 
 	return result.RowsAffected()
+}
+
+// ExecuteBulkUpdateWorldsendChartNotes は worldsend_charts テーブルの notes を1バッチ分まとめて更新します。
+func ExecuteBulkUpdateWorldsendChartNotes(ctx context.Context, db sqlx.ExtContext, records []WorldsendChartNotesRecord) (int64, error) {
+	var buf bytes.Buffer
+	if err := bulkUpdateWorldsendChartNotesTpl.Execute(&buf, records); err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update worldsend chart notes template: %w", err)
+	}
+
+	result, err := db.ExecContext(ctx, buf.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update worldsend chart notes: %w", err)
+	}
+
+	return result.RowsAffected()
+}
+
+// BulkUpdateWorldsendChartNotesInBatches は worldsend_charts.notes をバッチに分割して一括更新します。
+func BulkUpdateWorldsendChartNotesInBatches(ctx context.Context, db sqlx.ExtContext, records []WorldsendChartNotesRecord) (int64, error) {
+	if len(records) == 0 {
+		return 0, nil
+	}
+
+	if info.SQLiteCompoundSelectLimit <= 0 {
+		return 0, fmt.Errorf("invalid SQLiteCompoundSelectLimit: %d", info.SQLiteCompoundSelectLimit)
+	}
+
+	var totalAffected int64
+	for i := 0; i < len(records); i += info.SQLiteCompoundSelectLimit {
+		if err := ctx.Err(); err != nil {
+			return totalAffected, err
+		}
+
+		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
+		batch := records[i:end]
+
+		affected, err := ExecuteBulkUpdateWorldsendChartNotes(ctx, db, batch)
+		if err != nil {
+			return totalAffected, fmt.Errorf("failed to execute bulk update worldsend chart notes for batch range [%d:%d): %w", i, end, err)
+		}
+		totalAffected += affected
+	}
+
+	return totalAffected, nil
+}
+
+// ExecuteBulkUpdateWorldsendChartNotesDesigner は worldsend_charts テーブルの notes_designer を1バッチ分まとめて更新します。
+func ExecuteBulkUpdateWorldsendChartNotesDesigner(ctx context.Context, db sqlx.ExtContext, records []WorldsendChartNotesDesignerRecord) (int64, error) {
+	var buf bytes.Buffer
+	if err := bulkUpdateWorldsendChartNotesDesignerTpl.Execute(&buf, records); err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update worldsend chart notes_designer template: %w", err)
+	}
+
+	result, err := db.ExecContext(ctx, buf.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update worldsend chart notes_designer: %w", err)
+	}
+
+	return result.RowsAffected()
+}
+
+// BulkUpdateWorldsendChartNotesDesignerInBatches は worldsend_charts.notes_designer をバッチに分割して一括更新します。
+func BulkUpdateWorldsendChartNotesDesignerInBatches(ctx context.Context, db sqlx.ExtContext, records []WorldsendChartNotesDesignerRecord) (int64, error) {
+	if len(records) == 0 {
+		return 0, nil
+	}
+
+	if info.SQLiteCompoundSelectLimit <= 0 {
+		return 0, fmt.Errorf("invalid SQLiteCompoundSelectLimit: %d", info.SQLiteCompoundSelectLimit)
+	}
+
+	var totalAffected int64
+	for i := 0; i < len(records); i += info.SQLiteCompoundSelectLimit {
+		if err := ctx.Err(); err != nil {
+			return totalAffected, err
+		}
+
+		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
+		batch := records[i:end]
+
+		affected, err := ExecuteBulkUpdateWorldsendChartNotesDesigner(ctx, db, batch)
+		if err != nil {
+			return totalAffected, fmt.Errorf("failed to execute bulk update worldsend chart notes_designer for batch range [%d:%d): %w", i, end, err)
+		}
+		totalAffected += affected
+	}
+
+	return totalAffected, nil
 }

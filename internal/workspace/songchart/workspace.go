@@ -220,17 +220,19 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		_, exists := mysqlWorldsendCharts[mysqlSongID]
 		if !exists {
 			worldsendChartsToInsert = append(worldsendChartsToInsert, worldsendChartInsertRecord{
-				SongID:    mysqlSongID,
-				LevelStar: weChart.LevelStar,
-				Attribute: weChart.Attribute,
-				Notes:     weChart.Notes,
+				SongID:        mysqlSongID,
+				LevelStar:     weChart.LevelStar,
+				Attribute:     weChart.Attribute,
+				Notes:         weChart.Notes,
+				NotesDesigner: weChart.NotesDesigner,
 			})
 		} else {
 			worldsendChartsToUpdate = append(worldsendChartsToUpdate, worldsendChartUpdateRecord{
-				SongID:    mysqlSongID,
-				LevelStar: weChart.LevelStar,
-				Attribute: weChart.Attribute,
-				Notes:     weChart.Notes,
+				SongID:        mysqlSongID,
+				LevelStar:     weChart.LevelStar,
+				Attribute:     weChart.Attribute,
+				Notes:         weChart.Notes,
+				NotesDesigner: weChart.NotesDesigner,
 			})
 		}
 	}
@@ -274,11 +276,12 @@ type workspaceChart struct {
 }
 
 type workspaceWorldsendChart struct {
-	ID        int            `db:"id"`
-	SongID    int            `db:"song_id"`
-	LevelStar sql.NullInt64  `db:"level_star"`
-	Attribute sql.NullString `db:"attribute"`
-	Notes     sql.NullInt64  `db:"notes"`
+	ID            int            `db:"id"`
+	SongID        int            `db:"song_id"`
+	LevelStar     sql.NullInt64  `db:"level_star"`
+	Attribute     sql.NullString `db:"attribute"`
+	Notes         sql.NullInt64  `db:"notes"`
+	NotesDesigner sql.NullString `db:"notes_designer"`
 }
 
 type mysqlSong struct {
@@ -296,10 +299,11 @@ type mysqlChart struct {
 }
 
 type mysqlWorldsendChart struct {
-	SongID    int
-	LevelStar sql.NullInt64
-	Attribute sql.NullString
-	Notes     sql.NullInt64
+	SongID        int
+	LevelStar     sql.NullInt64
+	Attribute     sql.NullString
+	Notes         sql.NullInt64
+	NotesDesigner sql.NullString
 }
 
 func (w *SongChartWorkspace) loadWorkspaceSongs(ctx context.Context) ([]workspaceSong, error) {
@@ -372,7 +376,7 @@ func loadMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor) (map[stri
 }
 
 func loadMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor) (map[int]mysqlWorldsendChart, error) {
-	rows, err := mysql.QueryContext(ctx, `SELECT song_id, level_star, attribute, notes FROM worldsend_charts`)
+	rows, err := mysql.QueryContext(ctx, `SELECT song_id, level_star, attribute, notes, notes_designer FROM worldsend_charts`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load mysql worldsend_charts: %w", err)
 	}
@@ -381,7 +385,7 @@ func loadMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor) 
 	result := make(map[int]mysqlWorldsendChart)
 	for rows.Next() {
 		var rec mysqlWorldsendChart
-		if err := rows.Scan(&rec.SongID, &rec.LevelStar, &rec.Attribute, &rec.Notes); err != nil {
+		if err := rows.Scan(&rec.SongID, &rec.LevelStar, &rec.Attribute, &rec.Notes, &rec.NotesDesigner); err != nil {
 			return nil, fmt.Errorf("failed to scan mysql worldsend_chart: %w", err)
 		}
 		result[rec.SongID] = rec
@@ -483,10 +487,11 @@ func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 }
 
 type worldsendChartUpdateRecord struct {
-	SongID    int
-	LevelStar sql.NullInt64
-	Attribute sql.NullString
-	Notes     sql.NullInt64
+	SongID        int
+	LevelStar     sql.NullInt64
+	Attribute     sql.NullString
+	Notes         sql.NullInt64
+	NotesDesigner sql.NullString
 }
 
 // bulkUpdateMySQLWorldsendCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
@@ -495,21 +500,27 @@ UPDATE worldsend_charts
 SET
 	level_star = CASE
 		{{- range .Records }}
-		WHEN song_id = ? THEN ?
+		WHEN song_id = ? THEN COALESCE(?, level_star)
 		{{- end }}
 		ELSE level_star
 	END,
 	attribute = CASE
 		{{- range .Records }}
-		WHEN song_id = ? THEN ?
+		WHEN song_id = ? THEN COALESCE(?, attribute)
 		{{- end }}
 		ELSE attribute
 	END,
 	notes = CASE
 		{{- range .Records }}
-		WHEN song_id = ? THEN ?
+		WHEN song_id = ? THEN COALESCE(?, notes)
 		{{- end }}
 		ELSE notes
+	END,
+	notes_designer = CASE
+		{{- range .Records }}
+		WHEN song_id = ? THEN COALESCE(?, notes_designer)
+		{{- end }}
+		ELSE notes_designer
 	END
 WHERE song_id IN ({{ .Placeholders }})
 `))
@@ -548,6 +559,9 @@ func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 		}
 		for _, rec := range chunk { // notes
 			args = append(args, rec.SongID, nullableInt(rec.Notes))
+		}
+		for _, rec := range chunk { // notes_designer
+			args = append(args, rec.SongID, nullableString(rec.NotesDesigner))
 		}
 		for _, rec := range chunk { // WHERE IN
 			args = append(args, rec.SongID)
@@ -817,10 +831,11 @@ func bulkInsertMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 }
 
 type worldsendChartInsertRecord struct {
-	SongID    int
-	LevelStar sql.NullInt64
-	Attribute sql.NullString
-	Notes     sql.NullInt64
+	SongID        int
+	LevelStar     sql.NullInt64
+	Attribute     sql.NullString
+	Notes         sql.NullInt64
+	NotesDesigner sql.NullString
 }
 
 func bulkInsertMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []worldsendChartInsertRecord, chunkSize int) error {
@@ -832,25 +847,27 @@ func bulkInsertMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 		chunkSize = len(records)
 	}
 
-	const queryPrefix = "INSERT INTO worldsend_charts (song_id, level_star, attribute, notes) VALUES "
+	const queryPrefix = "INSERT INTO worldsend_charts (song_id, level_star, attribute, notes, notes_designer) VALUES "
 	const querySuffix = ` ON DUPLICATE KEY UPDATE
         level_star = VALUES(level_star),
         attribute = VALUES(attribute),
-        notes = COALESCE(VALUES(notes), notes)`
+        notes = COALESCE(VALUES(notes), notes),
+        notes_designer = COALESCE(notes_designer, VALUES(notes_designer))`
 
 	for start := 0; start < len(records); start += chunkSize {
 		end := min(start+chunkSize, len(records))
 
 		chunk := records[start:end]
 		values := make([]string, len(chunk))
-		args := make([]any, 0, len(chunk)*4)
+		args := make([]any, 0, len(chunk)*5)
 		for i, rec := range chunk {
-			values[i] = "(?, ?, ?, ?)"
+			values[i] = "(?, ?, ?, ?, ?)"
 			args = append(args,
 				rec.SongID,
 				nullableInt(rec.LevelStar),
 				nullableString(rec.Attribute),
 				nullableInt(rec.Notes),
+				nullableString(rec.NotesDesigner),
 			)
 		}
 
