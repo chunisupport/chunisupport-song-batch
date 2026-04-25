@@ -51,7 +51,7 @@ FLUSH PRIVILEGES;
 | 変数名 | 用途 |
 | --- | --- |
 | `APP_ENV` | ログレベル判定に利用（`production` のとき Info、それ以外は Debug） |
-| `PW_PEPPER` | 公式楽曲の `display_id` 生成に利用するペッパー値 |
+| `PW_PEPPER` | 起動時に必須のペッパー値。現在の `display_id` 生成では使用していません |
 | `DB_NAME` | MySQL データベース名 |
 | `DB_HOST` | MySQL ホスト名 |
 | `DB_PORT` | MySQL ポート番号 |
@@ -80,6 +80,11 @@ go run . --skip-download=false
 | --- | --- |
 | `--skip-download` | true の場合、ダウンロードをスキップして既存 JSON を使用します |
 | `--major-update` | 大型アップデート用のモード。公式データと追加楽曲のみを使用し、定数更新ルールを適用します |
+
+## `display_id` の生成
+楽曲の `display_id` は、`crypto/rand` で生成した 8 バイトの乱数を16進文字列に変換した16文字のIDです。楽曲名、アーティスト名、公式ID、`PW_PEPPER` などの入力値から決定的に生成しているものではありません。
+
+既存楽曲を MySQL に同期する際は、既存の `display_id` が空でない限り既存値を維持します。新規楽曲を別アプリから作成する場合も、同じDBに対しては一意制約の衝突を考慮して保存してください。
 
 ## テスト
 ユニットテストは次のコマンドで実行できます。
