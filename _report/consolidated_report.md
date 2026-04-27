@@ -31,16 +31,6 @@
 
 **推奨対策**: `io.LimitReader` を使用して読み込みサイズに上限を設けること。また、`io.ReadAll` ではなく `io.Copy` でファイルにストリーミング書き込みを行う実装に変更すべきです。
 
-### SEC-005: 動的SQL構築におけるインジェクションリスク (Severity: High)
-
-**内容**: `internal/workspace/songchart/workspace.go` において、`CASE` 文を含む複雑な UPDATE/INSERT 文を、`text/template` や文字列連結を用いて構築しています。プレースホルダ (`?`) を使用している箇所もありますが、SQL構文自体を動的に組み立てるアプローチはエスケープ漏れのリスクがあり、デバッグも困難です。
-
-**リスク**: テンプレートへの入力値が適切にサニタイズされていない場合、SQLインジェクション攻撃の対象となる可能性があります。
-
-**推奨対策**: 可能な限り `sqlx` の `NamedExec` や `In` 句を活用し、静的なSQL文とプレースホルダの組み合わせで処理してください。複雑な条件分岐が必要な場合は、アプリケーションロジック側でデータを整形してから単純なクエリを投げる設計を検討してください。
-
----
-
 ## 2. パフォーマンス (Performance)
 
 ### PERF-002: `io.ReadAll` と `json.Compact` によるメモリ圧迫 (Severity: High)
@@ -105,7 +95,7 @@
 
 ### MAINT-003: `panic` を前提としたエラーハンドリング (Severity: Low)
 
-**内容**: `internal/datasource/registry/registry.go`, `internal/workspace/songchart/workspace.go` において、`panic` を前提としたエラーハンドリング（`Register` の重複登録、`template.Must`）があり、実行時停止のリスクがあります。
+**内容**: `internal/datasource/registry/registry.go` において、`Register` の重複登録や nil provider で `panic` を発生させており、実行時停止のリスクがあります。
 
 **リスク**: 予期せぬ入力や設定ミスによりアプリケーションが突然停止し、運用に支障をきたす可能性があります。
 
@@ -119,11 +109,9 @@
 |----|----------|--------|------|
 | SEC-002 | セキュリティ | Medium | SSRF のリスク |
 | SEC-003 | セキュリティ | Medium | 巨大ファイルによる DoS |
-| SEC-005 | セキュリティ | High | 動的SQL構築におけるインジェクションリスク |
 | PERF-002 | パフォーマンス | High | `io.ReadAll` と `json.Compact` によるメモリ圧迫 |
 | PERF-003 | パフォーマンス | Medium | `SELECT *` の使用 |
 | PERF-004 | パフォーマンス | Medium | MySQL全件読み込み |
-| REL-001 | 信頼性 | Medium | `mainframe` パーサーのサイレントなデータ欠損 |
 | REL-002 | 信頼性 | Medium | 部分的なダウンロード失敗の許容 |
 | ARCH-001 | アーキテクチャ | High | OCP違反による拡張性の欠如 |
 | MAINT-002 | 保守性 | Low | 命名規則の不統一 |
