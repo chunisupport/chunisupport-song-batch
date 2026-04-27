@@ -3,6 +3,7 @@ package songchart
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -457,6 +458,116 @@ func TestResolveChartUpdate(t *testing.T) {
 			}
 			if a != tt.expectedAction {
 				t.Errorf("action mismatch: got %v, want %v", a, tt.expectedAction)
+			}
+		})
+	}
+}
+
+// TestBuildBulkUpdateChartsSQL は生成 SQL の構造を確認します。
+// データ値はすべてプレースホルダー(?) であり、SQL 文字列にリテラル値が埋め込まれないことを保証します。
+func TestBuildBulkUpdateChartsSQL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		n              int
+		wantWhenCount  int // 各 CASE ブロックあたりの WHEN 節の数
+		wantWhereCount int // WHERE IN の (?,?) の数
+	}{
+		{"1件", 1, 1, 1},
+		{"3件", 3, 3, 3},
+		{"10件", 10, 10, 10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			sql := buildBulkUpdateChartsSQL(tt.n)
+
+			// UPDATE 文の対象テーブルを確認
+			if !strings.Contains(sql, "UPDATE charts") {
+				t.Error("UPDATE charts が含まれていません")
+			}
+
+			// 4列分の CASE ブロックが存在することを確認
+			for _, col := range []string{"const", "is_const_unknown", "notes", "notes_designer"} {
+				if !strings.Contains(sql, col+" = CASE") {
+					t.Errorf("列 %s の CASE ブロックが含まれていません", col)
+				}
+			}
+
+			// WHEN 節の数を確認 (4列 × n件)
+			gotWhen := strings.Count(sql, "WHEN song_id = ? AND difficulty_id = ?")
+			wantWhen := 4 * tt.wantWhenCount
+			if gotWhen != wantWhen {
+				t.Errorf("WHEN 節の数: got %d, want %d", gotWhen, wantWhen)
+			}
+
+			// WHERE IN の (?,?) の数を確認
+			gotWhere := strings.Count(sql, "(?,?)")
+			if gotWhere != tt.wantWhereCount {
+				t.Errorf("WHERE IN の (?,?) の数: got %d, want %d", gotWhere, tt.wantWhereCount)
+			}
+		})
+	}
+}
+
+// TestBuildBulkUpdateWorldsendChartsSQL は生成 SQL の構造を確認します。
+// データ値はすべてプレースホルダー(?) であり、SQL 文字列にリテラル値が埋め込まれないことを保証します。
+func TestBuildBulkUpdateWorldsendChartsSQL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		n              int
+		wantWhenCount  int // 各 CASE ブロックあたりの WHEN 節の数
+		wantWhereCount int // WHERE IN の ? の数
+	}{
+		{"1件", 1, 1, 1},
+		{"3件", 3, 3, 3},
+		{"10件", 10, 10, 10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			sql := buildBulkUpdateWorldsendChartsSQL(tt.n)
+
+			// UPDATE 文の対象テーブルを確認
+			if !strings.Contains(sql, "UPDATE worldsend_charts") {
+				t.Error("UPDATE worldsend_charts が含まれていません")
+			}
+
+			// 4列分の CASE ブロックが存在することを確認
+			for _, col := range []string{"level_star", "attribute", "notes", "notes_designer"} {
+				if !strings.Contains(sql, col+" = CASE") {
+					t.Errorf("列 %s の CASE ブロックが含まれていません", col)
+				}
+			}
+
+			// WHEN 節の数を確認 (4列 × n件)
+			gotWhen := strings.Count(sql, "WHEN song_id = ?")
+			wantWhen := 4 * tt.wantWhenCount
+			if gotWhen != wantWhen {
+				t.Errorf("WHEN 節の数: got %d, want %d", gotWhen, wantWhen)
+			}
+
+			// COALESCE の数を確認 (4列 × n件)
+			gotCoalesce := strings.Count(sql, "COALESCE(?")
+			if gotCoalesce != wantWhen {
+				t.Errorf("COALESCE の数: got %d, want %d", gotCoalesce, wantWhen)
+			}
+
+			// WHERE IN の ? の数を確認
+			whereStart := strings.Index(sql, "WHERE song_id IN (")
+			if whereStart == -1 {
+				t.Fatal("WHERE song_id IN が含まれていません")
+			}
+			gotWhere := strings.Count(sql[whereStart:], "?")
+			if gotWhere != tt.wantWhereCount {
+				t.Errorf("WHERE IN の ? の数: got %d, want %d", gotWhere, tt.wantWhereCount)
 			}
 		})
 	}

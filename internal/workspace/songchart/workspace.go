@@ -1,14 +1,12 @@
 package songchart
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
 	"log/slog"
 	"strings"
-	"text/template"
 
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 	"github.com/chunisupport/chunisupport-song-batch/internal/info"
@@ -405,36 +403,47 @@ type chartUpdateRecord struct {
 	NotesDesigner sql.NullString
 }
 
-// bulkUpdateMySQLCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
-var bulkUpdateChartsTpl = template.Must(template.New("bulkUpdateCharts").Parse(`
-UPDATE charts
-SET
-	const = CASE
-		{{- range .Records }}
-		WHEN song_id = ? AND difficulty_id = ? THEN ?
-		{{- end }}
-		ELSE const
-	END,
-	is_const_unknown = CASE
-		{{- range .Records }}
-		WHEN song_id = ? AND difficulty_id = ? THEN ?
-		{{- end }}
-		ELSE is_const_unknown
-	END,
-	notes = CASE
-		{{- range .Records }}
-		WHEN song_id = ? AND difficulty_id = ? THEN ?
-		{{- end }}
-		ELSE notes
-	END,
-	notes_designer = CASE
-		{{- range .Records }}
-		WHEN song_id = ? AND difficulty_id = ? THEN ?
-		{{- end }}
-		ELSE notes_designer
-	END
-WHERE (song_id, difficulty_id) IN ({{ .Placeholders }})
-`))
+// buildBulkUpdateChartsSQL はバルク更新用の CASE 式を含む SQL 文を生成します。
+// text/template を使わず strings.Builder で構築することで、
+// テンプレートエンジン経由のインジェクションリスクを排除します。
+// データ値はすべてプレースホルダー(?) で渡されます。
+func buildBulkUpdateChartsSQL(n int) string {
+	var sb strings.Builder
+
+	sb.WriteString("UPDATE charts\nSET\n")
+
+	// CASE ブロックを列ごとに生成するクロージャ
+	writeCaseBlock := func(column, elseExpr string) {
+		sb.WriteString("\t")
+		sb.WriteString(column)
+		sb.WriteString(" = CASE\n")
+		for range n {
+			sb.WriteString("\t\tWHEN song_id = ? AND difficulty_id = ? THEN ?\n")
+		}
+		sb.WriteString("\t\tELSE ")
+		sb.WriteString(elseExpr)
+		sb.WriteString("\n\tEND")
+	}
+
+	writeCaseBlock("const", "const")
+	sb.WriteString(",\n")
+	writeCaseBlock("is_const_unknown", "is_const_unknown")
+	sb.WriteString(",\n")
+	writeCaseBlock("notes", "notes")
+	sb.WriteString(",\n")
+	writeCaseBlock("notes_designer", "notes_designer")
+
+	sb.WriteString("\nWHERE (song_id, difficulty_id) IN (")
+	for i := range n {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("(?,?)")
+	}
+	sb.WriteByte(')')
+
+	return sb.String()
+}
 
 func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []chartUpdateRecord, chunkSize int) error {
 	if len(records) == 0 {
@@ -449,17 +458,7 @@ func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 		end := min(start+chunkSize, len(records))
 
 		chunk := records[start:end]
-		placeholders := strings.Repeat("(?,?),", len(chunk))
-		placeholders = placeholders[:len(placeholders)-1]
-
-		var buf bytes.Buffer
-		tplData := map[string]any{
-			"Records":      chunk,
-			"Placeholders": placeholders,
-		}
-		if err := bulkUpdateChartsTpl.Execute(&buf, tplData); err != nil {
-			return fmt.Errorf("failed to render bulk update charts template (%d-%d): %w", start, end, err)
-		}
+		query := buildBulkUpdateChartsSQL(len(chunk))
 
 		var args []any
 		for _, rec := range chunk { // const
@@ -478,7 +477,7 @@ func bulkUpdateMySQLCharts(ctx context.Context, mysql domainrepo.DBExecutor, rec
 			args = append(args, rec.SongID, rec.DifficultyID)
 		}
 
-		if _, err := mysql.ExecContext(ctx, buf.String(), args...); err != nil {
+		if _, err := mysql.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("failed to bulk update charts (%d-%d): %w", start, end, err)
 		}
 	}
@@ -494,36 +493,49 @@ type worldsendChartUpdateRecord struct {
 	NotesDesigner sql.NullString
 }
 
-// bulkUpdateMySQLWorldsendCharts 用のテンプレート（パフォーマンスのため事前にパースしておく）
-var bulkUpdateWorldsendChartsTpl = template.Must(template.New("bulkUpdateWorldsendCharts").Parse(`
-UPDATE worldsend_charts
-SET
-	level_star = CASE
-		{{- range .Records }}
-		WHEN song_id = ? THEN COALESCE(?, level_star)
-		{{- end }}
-		ELSE level_star
-	END,
-	attribute = CASE
-		{{- range .Records }}
-		WHEN song_id = ? THEN COALESCE(?, attribute)
-		{{- end }}
-		ELSE attribute
-	END,
-	notes = CASE
-		{{- range .Records }}
-		WHEN song_id = ? THEN COALESCE(?, notes)
-		{{- end }}
-		ELSE notes
-	END,
-	notes_designer = CASE
-		{{- range .Records }}
-		WHEN song_id = ? THEN COALESCE(?, notes_designer)
-		{{- end }}
-		ELSE notes_designer
-	END
-WHERE song_id IN ({{ .Placeholders }})
-`))
+// buildBulkUpdateWorldsendChartsSQL はバルク更新用の CASE 式を含む SQL 文を生成します。
+// text/template を使わず strings.Builder で構築することで、
+// テンプレートエンジン経由のインジェクションリスクを排除します。
+// データ値はすべてプレースホルダー(?) で渡されます。
+func buildBulkUpdateWorldsendChartsSQL(n int) string {
+	var sb strings.Builder
+
+	sb.WriteString("UPDATE worldsend_charts\nSET\n")
+
+	// CASE ブロックを列ごとに生成するクロージャ
+	writeCaseBlock := func(column, coalesceExpr string) {
+		sb.WriteString("\t")
+		sb.WriteString(column)
+		sb.WriteString(" = CASE\n")
+		for range n {
+			sb.WriteString("\t\tWHEN song_id = ? THEN ")
+			sb.WriteString(coalesceExpr)
+			sb.WriteByte('\n')
+		}
+		sb.WriteString("\t\tELSE ")
+		sb.WriteString(column)
+		sb.WriteString("\n\tEND")
+	}
+
+	writeCaseBlock("level_star", "COALESCE(?, level_star)")
+	sb.WriteString(",\n")
+	writeCaseBlock("attribute", "COALESCE(?, attribute)")
+	sb.WriteString(",\n")
+	writeCaseBlock("notes", "COALESCE(?, notes)")
+	sb.WriteString(",\n")
+	writeCaseBlock("notes_designer", "COALESCE(?, notes_designer)")
+
+	sb.WriteString("\nWHERE song_id IN (")
+	for i := range n {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteByte('?')
+	}
+	sb.WriteByte(')')
+
+	return sb.String()
+}
 
 func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExecutor, records []worldsendChartUpdateRecord, chunkSize int) error {
 	if len(records) == 0 {
@@ -538,17 +550,7 @@ func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 		end := min(start+chunkSize, len(records))
 
 		chunk := records[start:end]
-		placeholders := strings.Repeat("?,", len(chunk))
-		placeholders = placeholders[:len(placeholders)-1]
-
-		var buf bytes.Buffer
-		tplData := map[string]any{
-			"Records":      chunk,
-			"Placeholders": placeholders,
-		}
-		if err := bulkUpdateWorldsendChartsTpl.Execute(&buf, tplData); err != nil {
-			return fmt.Errorf("failed to render bulk update worldsend_charts template (%d-%d): %w", start, end, err)
-		}
+		query := buildBulkUpdateWorldsendChartsSQL(len(chunk))
 
 		var args []any
 		for _, rec := range chunk { // level_star
@@ -567,7 +569,7 @@ func bulkUpdateMySQLWorldsendCharts(ctx context.Context, mysql domainrepo.DBExec
 			args = append(args, rec.SongID)
 		}
 
-		if _, err := mysql.ExecContext(ctx, buf.String(), args...); err != nil {
+		if _, err := mysql.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("failed to bulk update worldsend_charts (%d-%d): %w", start, end, err)
 		}
 	}
