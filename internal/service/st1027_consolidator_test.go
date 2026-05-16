@@ -511,6 +511,75 @@ func TestSt1027BulkUpdateChartNotesDesigner_InitialInsert(t *testing.T) {
 	}
 }
 
+func TestSt1027BulkUpdateChartNotesDesigner_SkipQuestionMark(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	defer ws.Close()
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_deleted)
+		VALUES (1, 'disp-001', 'Test Song', 'Test Artist', 1, 'OFF001', 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test song: %v", err)
+	}
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO charts (song_id, difficulty_id, const, is_const_unknown, notes, notes_designer)
+		VALUES (1, 3, 12.5, 0, 900, NULL), (1, 4, 13.0, 0, 1000, NULL)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test charts: %v", err)
+	}
+
+	st1027Data := &importer.St1027Data{
+		Songs: []importer.St1027Song{
+			{
+				Meta: importer.St1027Meta{
+					OfficialID: "OFF001",
+				},
+				Expert: importer.St1027Chart{Notesdesigner: ptrString("?")},
+				Master: importer.St1027Chart{Notesdesigner: ptrString("Techno Kitchen + ?")},
+			},
+		},
+	}
+
+	consolidator := &St1027Consolidator{
+		workspace: ws,
+		data:      st1027Data,
+	}
+
+	officialMap := map[string]int{"OFF001": 1}
+	err = consolidator.bulkUpdateChartNotesDesigner(ctx, officialMap)
+	if err != nil {
+		t.Fatalf("bulkUpdateChartNotesDesigner returned error: %v", err)
+	}
+
+	var designer1, designer2 *string
+	err = ws.DB().GetContext(ctx, &designer1, `SELECT notes_designer FROM charts WHERE song_id = 1 AND difficulty_id = 3`)
+	if err != nil {
+		t.Fatalf("failed to get notes_designer for chart 1: %v", err)
+	}
+	err = ws.DB().GetContext(ctx, &designer2, `SELECT notes_designer FROM charts WHERE song_id = 1 AND difficulty_id = 4`)
+	if err != nil {
+		t.Fatalf("failed to get notes_designer for chart 2: %v", err)
+	}
+
+	if designer1 != nil {
+		t.Errorf("expected designer1 to remain nil, got %v", *designer1)
+	}
+	if designer2 == nil || *designer2 != "Techno Kitchen + ?" {
+		t.Errorf("expected designer2=Techno Kitchen + ?, got %v", designer2)
+	}
+}
+
 func TestSt1027BulkUpdateChartNotesDesigner_NoUpdateExisting(t *testing.T) {
 	t.Parallel()
 

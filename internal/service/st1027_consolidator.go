@@ -133,7 +133,7 @@ func (c *St1027Consolidator) bulkUpdateChartNotesDesigner(ctx context.Context, o
 			}
 
 			notesDesigner := strings.TrimSpace(*chart.Notesdesigner)
-			if notesDesigner == "" {
+			if notesDesigner == "" || notesDesigner == "?" {
 				continue
 			}
 
