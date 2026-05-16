@@ -131,6 +131,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		songInsertRecords = append(songInsertRecords, songInsertRecord{
 			DisplayID:   song.DisplayID,
 			Title:       song.Title,
+			Reading:     song.Reading,
 			Artist:      song.Artist,
 			GenreID:     song.GenreID,
 			BPM:         song.BPM,
@@ -253,6 +254,7 @@ type workspaceSong struct {
 	ID          int            `db:"id"`
 	DisplayID   string         `db:"display_id"`
 	Title       string         `db:"title"`
+	Reading     sql.NullString `db:"reading"`
 	Artist      string         `db:"artist"`
 	GenreID     sql.NullInt64  `db:"genre_id"`
 	BPM         sql.NullInt64  `db:"bpm"`
@@ -706,6 +708,7 @@ func nullableString(value sql.NullString) any {
 type songInsertRecord struct {
 	DisplayID   string
 	Title       string
+	Reading     sql.NullString
 	Artist      string
 	GenreID     sql.NullInt64
 	BPM         sql.NullInt64
@@ -726,7 +729,7 @@ func bulkUpsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 
 	const queryPrefix = `
 INSERT INTO songs (
-	display_id, title, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_deleted
+	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_deleted
 ) VALUES `
 	const querySuffix = `
 ON DUPLICATE KEY UPDATE
@@ -735,6 +738,7 @@ ON DUPLICATE KEY UPDATE
 		ELSE display_id
 	END,
 	title = COALESCE(VALUES(title), title),
+	reading = VALUES(reading),
 	artist = COALESCE(VALUES(artist), artist),
 	genre_id = COALESCE(VALUES(genre_id), genre_id),
 	bpm = COALESCE(VALUES(bpm), bpm),
@@ -748,12 +752,13 @@ ON DUPLICATE KEY UPDATE
 
 		chunk := records[start:end]
 		values := make([]string, len(chunk))
-		args := make([]any, 0, len(chunk)*10)
+		args := make([]any, 0, len(chunk)*11)
 		for i, rec := range chunk {
-			values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+			values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 			args = append(args,
 				rec.DisplayID,
 				rec.Title,
+				nullableString(rec.Reading),
 				rec.Artist,
 				nullableInt(rec.GenreID),
 				nullableInt(rec.BPM),

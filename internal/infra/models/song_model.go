@@ -11,6 +11,7 @@ type SongModel struct {
 	ID          int     `db:"id"`
 	DisplayID   string  `db:"display_id"`
 	Title       string  `db:"title"`
+	Reading     *string `db:"reading"`
 	Artist      string  `db:"artist"`
 	GenreID     int     `db:"genre_id"`
 	OfficialIdx string  `db:"official_idx"`
@@ -73,6 +74,7 @@ func (m *SongModel) ToSongEntity() *entity.Song {
 type SongModelForUpsert struct {
 	DisplayID   string  `db:"display_id"`
 	Title       string  `db:"title"`
+	Reading     *string `db:"reading"`
 	Artist      string  `db:"artist"`
 	GenreID     int     `db:"genre_id"`
 	OfficialIdx string  `db:"official_idx"`

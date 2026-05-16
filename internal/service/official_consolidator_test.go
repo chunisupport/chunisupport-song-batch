@@ -417,6 +417,7 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 		{
 			ID:      "OFF001",
 			Title:   "Test Song 1",
+			Reading: "てすとそんぐ1",
 			Artist:  "Test Artist 1",
 			Catname: "POPS & ANIME",
 		},
@@ -448,9 +449,14 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 
 	// 各楽曲の内容を確認
 	var title1, title2 string
+	var reading1 string
 	err = ws.DB().GetContext(ctx, &title1, "SELECT title FROM songs WHERE official_idx = 'OFF001'")
 	if err != nil {
 		t.Fatalf("failed to get song 1: %v", err)
+	}
+	err = ws.DB().GetContext(ctx, &reading1, "SELECT reading FROM songs WHERE official_idx = 'OFF001'")
+	if err != nil {
+		t.Fatalf("failed to get song 1 reading: %v", err)
 	}
 	err = ws.DB().GetContext(ctx, &title2, "SELECT title FROM songs WHERE official_idx = 'OFF002'")
 	if err != nil {
@@ -459,6 +465,9 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 
 	if title1 != "Test Song 1" {
 		t.Errorf("expected 'Test Song 1', got '%s'", title1)
+	}
+	if reading1 != "てすとそんぐ1" {
+		t.Errorf("expected 'てすとそんぐ1', got '%s'", reading1)
 	}
 	if title2 != "Test Song 2" {
 		t.Errorf("expected 'Test Song 2', got '%s'", title2)
@@ -606,6 +615,7 @@ func TestPrepareSongsForUpsert(t *testing.T) {
 		{
 			ID:      "OFF001",
 			Title:   "  Trimmed Title  ",
+			Reading: "  とりむたいとる  ",
 			Artist:  "  Trimmed Artist  ",
 			Catname: "POPS & ANIME",
 			Image:   "CHU_UI_Jacket_0001.jpg",
@@ -631,6 +641,9 @@ func TestPrepareSongsForUpsert(t *testing.T) {
 	// タイトルとアーティストがトリムされていることを確認
 	if songs[0].Title != "Trimmed Title" {
 		t.Errorf("expected trimmed title, got '%s'", songs[0].Title)
+	}
+	if songs[0].Reading == nil || *songs[0].Reading != "とりむたいとる" {
+		t.Errorf("expected trimmed reading, got %v", songs[0].Reading)
 	}
 	if songs[0].Artist != "Trimmed Artist" {
 		t.Errorf("expected trimmed artist, got '%s'", songs[0].Artist)

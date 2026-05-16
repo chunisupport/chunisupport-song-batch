@@ -142,7 +142,9 @@ func (c *OfficialConsolidator) prepareSongsForUpsert() ([]*models.SongModelForUp
 			continue
 		}
 
-		songsToUpsert = append(songsToUpsert, models.FromSongEntityForUpsert(song))
+		songModel := models.FromSongEntityForUpsert(song)
+		songModel.Reading = stringPtrIfNotEmpty(officialSong.Reading)
+		songsToUpsert = append(songsToUpsert, songModel)
 		seenOfficialIdx[officialID] = struct{}{}
 	}
 	return songsToUpsert, seenOfficialIdx
@@ -151,13 +153,14 @@ func (c *OfficialConsolidator) prepareSongsForUpsert() ([]*models.SongModelForUp
 func (c *OfficialConsolidator) bulkUpsertSongs(ctx context.Context, songs []*models.SongModelForUpsert) error {
 	query := `
 INSERT INTO songs (
-	display_id, title, artist, genre_id, official_idx, jacket, is_worldsend, is_deleted
+	display_id, title, reading, artist, genre_id, official_idx, jacket, is_worldsend, is_deleted
 ) VALUES (
-	:display_id, :title, :artist, :genre_id, :official_idx, :jacket, :is_worldsend, 0
+	:display_id, :title, :reading, :artist, :genre_id, :official_idx, :jacket, :is_worldsend, 0
 )
 ON CONFLICT(official_idx) DO UPDATE SET
 	display_id = excluded.display_id,
 	title = excluded.title,
+	reading = excluded.reading,
 	artist = excluded.artist,
 	genre_id = excluded.genre_id,
 	jacket = excluded.jacket,
@@ -412,6 +415,14 @@ func nullIfEmpty(value string) any {
 		return nil
 	}
 	return value
+}
+
+func stringPtrIfNotEmpty(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 func (c *OfficialConsolidator) loadActiveOfficialSongs(ctx context.Context) (map[string]int, error) {

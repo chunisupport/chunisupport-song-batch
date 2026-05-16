@@ -193,10 +193,10 @@ func TestLoadWorkspaceSongs(t *testing.T) {
 
 	// テストデータ挿入
 	_, err = ws.DB().ExecContext(ctx, `
-		INSERT INTO songs (display_id, title, artist, genre_id, official_idx, is_worldsend, is_deleted)
+		INSERT INTO songs (display_id, title, reading, artist, genre_id, official_idx, is_worldsend, is_deleted)
 		VALUES 
-			('disp-001', 'Song 1', 'Artist 1', 1, 'OFF001', 0, 0),
-			('disp-002', 'Song 2', 'Artist 2', 2, 'OFF002', 0, 0)
+			('disp-001', 'Song 1', 'そんぐ1', 'Artist 1', 1, 'OFF001', 0, 0),
+			('disp-002', 'Song 2', NULL, 'Artist 2', 2, 'OFF002', 0, 0)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test songs: %v", err)
@@ -214,6 +214,12 @@ func TestLoadWorkspaceSongs(t *testing.T) {
 	// 順序を確認（ORDER BY id）
 	if songs[0].Title != "Song 1" || songs[1].Title != "Song 2" {
 		t.Errorf("songs not in expected order")
+	}
+	if !songs[0].Reading.Valid || songs[0].Reading.String != "そんぐ1" {
+		t.Errorf("expected reading 'そんぐ1', got %+v", songs[0].Reading)
+	}
+	if songs[1].Reading.Valid {
+		t.Errorf("expected null reading, got %+v", songs[1].Reading)
 	}
 }
 
