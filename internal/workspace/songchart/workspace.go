@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 	"github.com/chunisupport/chunisupport-song-batch/internal/info"
@@ -31,7 +32,8 @@ type Config struct {
 
 // SyncOptions は MySQL への同期挙動を制御します。
 type SyncOptions struct {
-	MajorUpdate bool
+	MajorUpdate            bool
+	FillMissingReleaseDate bool // 特定フラグ: データソース・MySQL両方に日付がないbrand new楽曲へ実行日(JST)をreleased_at補完
 }
 
 // SongChartWorkspace は songs/charts を扱う SQLite ワークスペースを表します。
@@ -118,6 +120,14 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		return err
 	}
 
+	// 特定フラグ有効時のための実行日(JST)取得（1回のみ）
+	// 条件: データソースから一切日付が来ておらず、かつこの実行開始時点でMySQLに楽曲自体が存在しない場合のみ使用
+	var executionDateJST string
+	if opts.FillMissingReleaseDate {
+		jst := time.FixedZone("JST", 9*60*60)
+		executionDateJST = time.Now().In(jst).Format("2006-01-02")
+	}
+
 	officialSeen := make(map[string]struct{}, len(wsSongs))
 	songInsertRecords := make([]songInsertRecord, 0, len(wsSongs))
 
@@ -125,6 +135,19 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		if song.OfficialIdx == "" {
 			slog.Warn("Skipping workspace song without official_idx", "song_id", song.ID)
 			continue
+		}
+
+		releasedAt := song.ReleasedAt
+		// フラグ有効 かつ released_at が空 かつ MySQLにこのofficial_idxが存在しない（= brand new 楽曲）場合のみ実行日で補完
+		// これにより「楽曲はあるが日付がnull」の既存曲は一切触らない（ユーザ要件厳守）
+		if executionDateJST != "" {
+			if !releasedAt.Valid || strings.TrimSpace(releasedAt.String) == "" {
+				if _, existsInMySQL := mysqlSongs[song.OfficialIdx]; !existsInMySQL {
+					releasedAt = sql.NullString{String: executionDateJST, Valid: true}
+					slog.Info("特定フラグにより未補完の新規楽曲へ実行日(JST)をreleased_atとして補完",
+						"official_idx", song.OfficialIdx, "date", executionDateJST)
+				}
+			}
 		}
 
 		officialSeen[song.OfficialIdx] = struct{}{}
@@ -135,7 +158,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 			Artist:      song.Artist,
 			GenreID:     song.GenreID,
 			BPM:         song.BPM,
-			ReleasedAt:  song.ReleasedAt,
+			ReleasedAt:  releasedAt,
 			OfficialIdx: song.OfficialIdx,
 			Jacket:      song.Jacket,
 			IsWorldsend: song.IsWorldsend,

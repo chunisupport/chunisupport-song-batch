@@ -12,7 +12,8 @@ import (
 
 // ConsolidationOptions は統合処理の挙動を制御します。
 type ConsolidationOptions struct {
-	MajorUpdate bool
+	MajorUpdate            bool
+	FillMissingReleaseDate bool // 特定フラグ有効時、データソース・MySQL両方に日付のない新規楽曲へ実行日(JST)を補完
 }
 
 // ConsolidationSources は統合に利用するソースデータを保持します。
@@ -104,7 +105,8 @@ func (s *ConsolidationService) SyncWorkspace(ctx context.Context, workspace *son
 		return nil
 	}
 	syncOpts := songchart.SyncOptions{
-		MajorUpdate: s.opts.MajorUpdate,
+		MajorUpdate:            s.opts.MajorUpdate,
+		FillMissingReleaseDate: s.opts.FillMissingReleaseDate,
 	}
 
 	if err := workspace.SyncToMySQL(ctx, mysql, syncOpts); err != nil {

@@ -80,6 +80,7 @@ go run . --skip-download=false
 | --- | --- |
 | `--skip-download` | true の場合、ダウンロードをスキップして既存 JSON を使用します |
 | `--major-update` | 大型アップデート用のモード。公式データと追加楽曲のみを使用し、定数更新ルールを適用します |
+| `--fill-missing-release-date` | 特定フラグ有効時、いずれのデータソースからも日付が補完されずMySQLに楽曲自体が存在しない（brand new）場合に実行日（JST）をreleased_atへ補完します。otoge-db等で日付が得られない場合の最終フォールバック用 |
 
 ## `display_id` の生成
 楽曲の `display_id` は、`crypto/rand` で生成した 8 バイトの乱数を16進文字列に変換した16文字のIDです。楽曲名、アーティスト名、公式ID、`PW_PEPPER` などの入力値から決定的に生成しているものではありません。

@@ -294,7 +294,8 @@ func consolidateToFinalTables(ctx context.Context, db *sqlx.DB, pwPepper string,
 	genreRepo := repository.NewGenreRepository(db)
 
 	opts := service.ConsolidationOptions{
-		MajorUpdate: flags.MajorUpdate,
+		MajorUpdate:            flags.MajorUpdate,
+		FillMissingReleaseDate: flags.FillMissingReleaseDate,
 	}
 	consolidationService := service.NewConsolidationService(db, difficultyRepo, genreRepo, pwPepper, datasourceNames(datasources), opts, sources)
 
