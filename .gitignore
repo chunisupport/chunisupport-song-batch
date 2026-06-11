@@ -66,3 +66,5 @@ schema_dump.sql
 
 # Serena一旦無視
 .serena/
+
+Taskfile.yml
