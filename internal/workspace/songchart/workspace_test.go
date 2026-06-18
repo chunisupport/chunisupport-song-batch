@@ -469,6 +469,74 @@ func TestResolveChartUpdate(t *testing.T) {
 	}
 }
 
+// TestBuildBulkUpdateSongsSQL は生成 SQL の構造を確認します。
+func TestBuildBulkUpdateSongsSQL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		n              int
+		wantWhenCount  int
+		wantWhereCount int
+	}{
+		{"1件", 1, 1, 1},
+		{"3件", 3, 3, 3},
+		{"10件", 10, 10, 10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			sql := buildBulkUpdateSongsSQL(tt.n)
+
+			if !strings.Contains(sql, "UPDATE songs") {
+				t.Error("UPDATE songs が含まれていません")
+			}
+
+			for _, col := range []string{"display_id", "title", "reading", "artist", "genre_id", "bpm", "released_at", "jacket", "is_worldsend"} {
+				if !strings.Contains(sql, col+" = CASE") {
+					t.Errorf("列 %s の CASE ブロックが含まれていません", col)
+				}
+			}
+
+			gotWhen := strings.Count(sql, "WHEN id = ?")
+			wantWhen := 9 * tt.wantWhenCount
+			if gotWhen != wantWhen {
+				t.Errorf("WHEN 節の数: got %d, want %d", gotWhen, wantWhen)
+			}
+
+			whereStart := strings.Index(sql, "WHERE id IN (")
+			if whereStart == -1 {
+				t.Fatal("WHERE id IN が含まれていません")
+			}
+			gotWhere := strings.Count(sql[whereStart:], "?")
+			if gotWhere != tt.wantWhereCount {
+				t.Errorf("WHERE IN の ? の数: got %d, want %d", gotWhere, tt.wantWhereCount)
+			}
+		})
+	}
+}
+
+// TestBulkInsertSongsQuerySuffix は新規判定後の競合でも原子的に更新できることを確認します。
+func TestBulkInsertSongsQuerySuffix(t *testing.T) {
+	t.Parallel()
+
+	for _, want := range []string{
+		"AS new",
+		"ON DUPLICATE KEY UPDATE",
+		"official_idx = new.official_idx",
+	} {
+		if !strings.Contains(bulkInsertSongsQuerySuffix, want) {
+			t.Errorf("楽曲INSERTのupsert句に %q が含まれていません", want)
+		}
+	}
+
+	if strings.Contains(bulkInsertSongsQuerySuffix, "VALUES(") {
+		t.Error("非推奨のVALUES()参照が含まれています")
+	}
+}
+
 // TestBuildBulkUpdateChartsSQL は生成 SQL の構造を確認します。
 // データ値はすべてプレースホルダー(?) であり、SQL 文字列にリテラル値が埋め込まれないことを保証します。
 func TestBuildBulkUpdateChartsSQL(t *testing.T) {

@@ -129,7 +129,8 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 	}
 
 	officialSeen := make(map[string]struct{}, len(wsSongs))
-	songInsertRecords := make([]songInsertRecord, 0, len(wsSongs))
+	songsToInsert := make([]songInsertRecord, 0, len(wsSongs))
+	songsToUpdate := make([]songUpdateRecord, 0, len(wsSongs))
 
 	for _, song := range wsSongs {
 		if song.OfficialIdx == "" {
@@ -151,7 +152,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		}
 
 		officialSeen[song.OfficialIdx] = struct{}{}
-		songInsertRecords = append(songInsertRecords, songInsertRecord{
+		rec := songInsertRecord{
 			DisplayID:   song.DisplayID,
 			Title:       song.Title,
 			Reading:     song.Reading,
@@ -162,10 +163,21 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 			OfficialIdx: song.OfficialIdx,
 			Jacket:      song.Jacket,
 			IsWorldsend: song.IsWorldsend,
-		})
+		}
+		if existing, exists := mysqlSongs[song.OfficialIdx]; exists {
+			songsToUpdate = append(songsToUpdate, songUpdateRecord{
+				ID:     existing.ID,
+				record: rec,
+			})
+		} else {
+			songsToInsert = append(songsToInsert, rec)
+		}
 	}
 
-	if err := bulkUpsertMySQLSongs(ctx, mysql, songInsertRecords, info.BulkInsertChunkSize); err != nil {
+	if err := bulkInsertMySQLSongs(ctx, mysql, songsToInsert, info.BulkInsertChunkSize); err != nil {
+		return err
+	}
+	if err := bulkUpdateMySQLSongs(ctx, mysql, songsToUpdate, info.BulkInsertChunkSize); err != nil {
 		return err
 	}
 
@@ -741,7 +753,106 @@ type songInsertRecord struct {
 	IsWorldsend int
 }
 
-func bulkUpsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, records []songInsertRecord, chunkSize int) error {
+type songUpdateRecord struct {
+	ID     int
+	record songInsertRecord
+}
+
+const bulkInsertSongsQuerySuffix = ` AS new
+ON DUPLICATE KEY UPDATE
+	display_id = CASE
+		WHEN display_id IS NULL OR display_id = '' THEN new.display_id
+		ELSE display_id
+	END,
+	title = COALESCE(new.title, title),
+	reading = new.reading,
+	artist = COALESCE(new.artist, artist),
+	genre_id = COALESCE(new.genre_id, genre_id),
+	bpm = COALESCE(new.bpm, bpm),
+	released_at = COALESCE(released_at, new.released_at),
+	official_idx = new.official_idx,
+	jacket = COALESCE(new.jacket, jacket),
+	is_worldsend = new.is_worldsend`
+
+// buildBulkUpdateSongsSQL は楽曲バルク更新用の CASE 式を含む SQL 文を生成します。
+func buildBulkUpdateSongsSQL(n int) string {
+	var sb strings.Builder
+
+	sb.WriteString("UPDATE songs\nSET\n")
+
+	writeDisplayIDBlock := func() {
+		sb.WriteString("\tdisplay_id = CASE\n")
+		for range n {
+			sb.WriteString("\t\tWHEN id = ? THEN CASE WHEN display_id IS NULL OR display_id = '' THEN ? ELSE display_id END\n")
+		}
+		sb.WriteString("\t\tELSE display_id\n\tEND")
+	}
+
+	writeCoalesceBlock := func(column string) {
+		sb.WriteString("\t")
+		sb.WriteString(column)
+		sb.WriteString(" = CASE\n")
+		for range n {
+			sb.WriteString("\t\tWHEN id = ? THEN COALESCE(?, ")
+			sb.WriteString(column)
+			sb.WriteString(")\n")
+		}
+		sb.WriteString("\t\tELSE ")
+		sb.WriteString(column)
+		sb.WriteString("\n\tEND")
+	}
+
+	writeDirectBlock := func(column string) {
+		sb.WriteString("\t")
+		sb.WriteString(column)
+		sb.WriteString(" = CASE\n")
+		for range n {
+			sb.WriteString("\t\tWHEN id = ? THEN ?\n")
+		}
+		sb.WriteString("\t\tELSE ")
+		sb.WriteString(column)
+		sb.WriteString("\n\tEND")
+	}
+
+	writeReleasedAtBlock := func() {
+		sb.WriteString("\treleased_at = CASE\n")
+		for range n {
+			sb.WriteString("\t\tWHEN id = ? THEN COALESCE(released_at, ?)\n")
+		}
+		sb.WriteString("\t\tELSE released_at\n\tEND")
+	}
+
+	writeDisplayIDBlock()
+	sb.WriteString(",\n")
+	writeCoalesceBlock("title")
+	sb.WriteString(",\n")
+	writeDirectBlock("reading")
+	sb.WriteString(",\n")
+	writeCoalesceBlock("artist")
+	sb.WriteString(",\n")
+	writeCoalesceBlock("genre_id")
+	sb.WriteString(",\n")
+	writeCoalesceBlock("bpm")
+	sb.WriteString(",\n")
+	writeReleasedAtBlock()
+	sb.WriteString(",\n")
+	writeCoalesceBlock("jacket")
+	sb.WriteString(",\n")
+	writeDirectBlock("is_worldsend")
+
+	sb.WriteString("\nWHERE id IN (")
+	for i := range n {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteByte('?')
+	}
+	sb.WriteByte(')')
+
+	return sb.String()
+}
+
+func bulkInsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, records []songInsertRecord, chunkSize int) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -754,21 +865,6 @@ func bulkUpsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 INSERT INTO songs (
 	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_deleted
 ) VALUES `
-	const querySuffix = `
-ON DUPLICATE KEY UPDATE
-	display_id = CASE
-		WHEN display_id IS NULL OR display_id = '' THEN VALUES(display_id)
-		ELSE display_id
-	END,
-	title = COALESCE(VALUES(title), title),
-	reading = VALUES(reading),
-	artist = COALESCE(VALUES(artist), artist),
-	genre_id = COALESCE(VALUES(genre_id), genre_id),
-	bpm = COALESCE(VALUES(bpm), bpm),
-	released_at = COALESCE(released_at, VALUES(released_at)),
-	jacket = COALESCE(VALUES(jacket), jacket),
-	is_worldsend = VALUES(is_worldsend),
-	id = LAST_INSERT_ID(id)`
 
 	for start := 0; start < len(records); start += chunkSize {
 		end := min(start+chunkSize, len(records))
@@ -793,9 +889,64 @@ ON DUPLICATE KEY UPDATE
 			)
 		}
 
-		query := queryPrefix + strings.Join(values, ",") + querySuffix
+		query := queryPrefix + strings.Join(values, ",") + bulkInsertSongsQuerySuffix
 		if _, err := mysql.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("failed to bulk upsert songs (%d-%d): %w", start, end, err)
+			return fmt.Errorf("failed to bulk insert songs (%d-%d): %w", start, end, err)
+		}
+	}
+
+	return nil
+}
+
+func bulkUpdateMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, records []songUpdateRecord, chunkSize int) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	if chunkSize <= 0 {
+		chunkSize = len(records)
+	}
+
+	for start := 0; start < len(records); start += chunkSize {
+		end := min(start+chunkSize, len(records))
+
+		chunk := records[start:end]
+		query := buildBulkUpdateSongsSQL(len(chunk))
+		args := make([]any, 0, len(chunk)*17)
+
+		for _, rec := range chunk {
+			args = append(args, rec.ID, rec.record.DisplayID)
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, rec.record.Title)
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, nullableString(rec.record.Reading))
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, rec.record.Artist)
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, nullableInt(rec.record.GenreID))
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, nullableInt(rec.record.BPM))
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, nullableString(rec.record.ReleasedAt))
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, nullableString(rec.record.Jacket))
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, rec.record.IsWorldsend)
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID)
+		}
+
+		if _, err := mysql.ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("failed to bulk update songs (%d-%d): %w", start, end, err)
 		}
 	}
 
