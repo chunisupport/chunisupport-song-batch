@@ -174,6 +174,10 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 		}
 	}
 
+	slog.Info("Prepared MySQL song synchronization",
+		"insert_count", len(songsToInsert),
+		"update_count", len(songsToUpdate))
+
 	if err := bulkInsertMySQLSongs(ctx, mysql, songsToInsert, info.BulkInsertChunkSize); err != nil {
 		return err
 	}
@@ -758,21 +762,7 @@ type songUpdateRecord struct {
 	record songInsertRecord
 }
 
-const bulkInsertSongsQuerySuffix = ` AS new
-ON DUPLICATE KEY UPDATE
-	display_id = CASE
-		WHEN display_id IS NULL OR display_id = '' THEN new.display_id
-		ELSE display_id
-	END,
-	title = COALESCE(new.title, title),
-	reading = new.reading,
-	artist = COALESCE(new.artist, artist),
-	genre_id = COALESCE(new.genre_id, genre_id),
-	bpm = COALESCE(new.bpm, bpm),
-	released_at = COALESCE(released_at, new.released_at),
-	official_idx = new.official_idx,
-	jacket = COALESCE(new.jacket, jacket),
-	is_worldsend = new.is_worldsend`
+const songInsertColumnCount = 11
 
 // buildBulkUpdateSongsSQL は楽曲バルク更新用の CASE 式を含む SQL 文を生成します。
 func buildBulkUpdateSongsSQL(n int) string {
@@ -852,6 +842,22 @@ func buildBulkUpdateSongsSQL(n int) string {
 	return sb.String()
 }
 
+// buildBulkInsertSongsSQL は新規楽曲だけを登録するSQL文を生成します。
+// 競合時に既存楽曲を誤更新しないよう、UPSERTは使用しません。
+func buildBulkInsertSongsSQL(n int) string {
+	const queryPrefix = `
+INSERT INTO songs (
+	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_deleted
+) VALUES `
+
+	values := make([]string, n)
+	for i := range n {
+		values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	}
+
+	return queryPrefix + strings.Join(values, ",")
+}
+
 func bulkInsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, records []songInsertRecord, chunkSize int) error {
 	if len(records) == 0 {
 		return nil
@@ -861,19 +867,12 @@ func bulkInsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 		chunkSize = len(records)
 	}
 
-	const queryPrefix = `
-INSERT INTO songs (
-	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_deleted
-) VALUES `
-
 	for start := 0; start < len(records); start += chunkSize {
 		end := min(start+chunkSize, len(records))
 
 		chunk := records[start:end]
-		values := make([]string, len(chunk))
-		args := make([]any, 0, len(chunk)*11)
-		for i, rec := range chunk {
-			values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+		args := make([]any, 0, len(chunk)*songInsertColumnCount)
+		for _, rec := range chunk {
 			args = append(args,
 				rec.DisplayID,
 				rec.Title,
@@ -889,7 +888,7 @@ INSERT INTO songs (
 			)
 		}
 
-		query := queryPrefix + strings.Join(values, ",") + bulkInsertSongsQuerySuffix
+		query := buildBulkInsertSongsSQL(len(chunk))
 		if _, err := mysql.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("failed to bulk insert songs (%d-%d): %w", start, end, err)
 		}

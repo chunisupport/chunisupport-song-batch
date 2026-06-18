@@ -518,22 +518,35 @@ func TestBuildBulkUpdateSongsSQL(t *testing.T) {
 	}
 }
 
-// TestBulkInsertSongsQuerySuffix は新規判定後の競合でも原子的に更新できることを確認します。
-func TestBulkInsertSongsQuerySuffix(t *testing.T) {
+// TestBuildBulkInsertSongsSQL は新規楽曲のINSERTが既存楽曲を更新しないことを確認します。
+func TestBuildBulkInsertSongsSQL(t *testing.T) {
 	t.Parallel()
 
-	for _, want := range []string{
-		"AS new",
-		"ON DUPLICATE KEY UPDATE",
-		"official_idx = new.official_idx",
-	} {
-		if !strings.Contains(bulkInsertSongsQuerySuffix, want) {
-			t.Errorf("楽曲INSERTのupsert句に %q が含まれていません", want)
-		}
+	tests := []struct {
+		name string
+		n    int
+	}{
+		{name: "1件", n: 1},
+		{name: "3件", n: 3},
+		{name: "500件", n: 500},
 	}
 
-	if strings.Contains(bulkInsertSongsQuerySuffix, "VALUES(") {
-		t.Error("非推奨のVALUES()参照が含まれています")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			query := buildBulkInsertSongsSQL(tt.n)
+			if !strings.Contains(query, "INSERT INTO songs") {
+				t.Error("INSERT INTO songs が含まれていません")
+			}
+			if strings.Contains(query, "ON DUPLICATE KEY UPDATE") {
+				t.Error("既存楽曲を暗黙更新するUPSERT句が含まれています")
+			}
+
+			if got, want := strings.Count(query, "?"), tt.n*songInsertColumnCount; got != want {
+				t.Errorf("プレースホルダー数: got %d, want %d", got, want)
+			}
+		})
 	}
 }
 
