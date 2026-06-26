@@ -144,6 +144,7 @@ func (c *OfficialConsolidator) prepareSongsForUpsert() ([]*models.SongModelForUp
 
 		songModel := models.FromSongEntityForUpsert(song)
 		songModel.Reading = stringPtrIfNotEmpty(officialSong.Reading)
+		songModel.IsNew = util.BoolToInt(strings.TrimSpace(officialSong.Newflag) == "1")
 		songsToUpsert = append(songsToUpsert, songModel)
 		seenOfficialIdx[officialID] = struct{}{}
 	}
@@ -153,9 +154,9 @@ func (c *OfficialConsolidator) prepareSongsForUpsert() ([]*models.SongModelForUp
 func (c *OfficialConsolidator) bulkUpsertSongs(ctx context.Context, songs []*models.SongModelForUpsert) error {
 	query := `
 INSERT INTO songs (
-	display_id, title, reading, artist, genre_id, official_idx, jacket, is_worldsend, is_deleted
+	display_id, title, reading, artist, genre_id, official_idx, jacket, is_worldsend, is_new, is_deleted
 ) VALUES (
-	:display_id, :title, :reading, :artist, :genre_id, :official_idx, :jacket, :is_worldsend, 0
+	:display_id, :title, :reading, :artist, :genre_id, :official_idx, :jacket, :is_worldsend, :is_new, 0
 )
 ON CONFLICT(official_idx) DO UPDATE SET
 	display_id = excluded.display_id,
@@ -164,7 +165,8 @@ ON CONFLICT(official_idx) DO UPDATE SET
 	artist = excluded.artist,
 	genre_id = excluded.genre_id,
 	jacket = excluded.jacket,
-	is_worldsend = excluded.is_worldsend
+	is_worldsend = excluded.is_worldsend,
+	is_new = excluded.is_new
 `
 	_, err := sqlx.NamedExecContext(ctx, c.workspace.DB(), query, songs)
 	if err != nil {

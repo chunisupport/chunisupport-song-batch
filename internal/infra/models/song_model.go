@@ -19,6 +19,7 @@ type SongModel struct {
 	BPM         *int    `db:"bpm"`
 	ReleasedAt  *string `db:"released_at"`
 	IsWorldsEnd int     `db:"is_worldsend"`
+	IsNew       int     `db:"is_new"`
 	IsDeleted   int     `db:"is_deleted"`
 }
 
@@ -82,6 +83,7 @@ type SongModelForUpsert struct {
 	BPM         *int    `db:"bpm"`
 	ReleasedAt  *string `db:"released_at"`
 	IsWorldsEnd int     `db:"is_worldsend"`
+	IsNew       int     `db:"is_new"`
 }
 
 // FromSongEntityForUpsert はSongエンティティからUPSERT用モデルを生成します

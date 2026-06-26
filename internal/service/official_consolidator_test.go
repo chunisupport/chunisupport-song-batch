@@ -416,6 +416,7 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 	officialData := importer.OfficialData{
 		{
 			ID:      "OFF001",
+			Newflag: "1",
 			Title:   "Test Song 1",
 			Reading: "てすとそんぐ1",
 			Artist:  "Test Artist 1",
@@ -450,6 +451,7 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 	// 各楽曲の内容を確認
 	var title1, title2 string
 	var reading1 string
+	var isNew1, isNew2 int
 	err = ws.DB().GetContext(ctx, &title1, "SELECT title FROM songs WHERE official_idx = 'OFF001'")
 	if err != nil {
 		t.Fatalf("failed to get song 1: %v", err)
@@ -462,6 +464,14 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get song 2: %v", err)
 	}
+	err = ws.DB().GetContext(ctx, &isNew1, "SELECT is_new FROM songs WHERE official_idx = 'OFF001'")
+	if err != nil {
+		t.Fatalf("failed to get song 1 is_new: %v", err)
+	}
+	err = ws.DB().GetContext(ctx, &isNew2, "SELECT is_new FROM songs WHERE official_idx = 'OFF002'")
+	if err != nil {
+		t.Fatalf("failed to get song 2 is_new: %v", err)
+	}
 
 	if title1 != "Test Song 1" {
 		t.Errorf("expected 'Test Song 1', got '%s'", title1)
@@ -471,6 +481,12 @@ func TestOfficialConsolidator_Consolidate_InsertsSongs(t *testing.T) {
 	}
 	if title2 != "Test Song 2" {
 		t.Errorf("expected 'Test Song 2', got '%s'", title2)
+	}
+	if isNew1 != 1 {
+		t.Errorf("expected OFF001 is_new=1, got %d", isNew1)
+	}
+	if isNew2 != 0 {
+		t.Errorf("expected OFF002 is_new=0, got %d", isNew2)
 	}
 }
 
@@ -614,6 +630,7 @@ func TestPrepareSongsForUpsert(t *testing.T) {
 	officialData := importer.OfficialData{
 		{
 			ID:      "OFF001",
+			Newflag: "1",
 			Title:   "  Trimmed Title  ",
 			Reading: "  とりむたいとる  ",
 			Artist:  "  Trimmed Artist  ",
@@ -653,8 +670,14 @@ func TestPrepareSongsForUpsert(t *testing.T) {
 	if songs[0].IsWorldsEnd != 0 {
 		t.Errorf("expected normal song (is_worldsend=0), got %d", songs[0].IsWorldsEnd)
 	}
+	if songs[0].IsNew != 1 {
+		t.Errorf("expected new song (is_new=1), got %d", songs[0].IsNew)
+	}
 	if songs[1].IsWorldsEnd != 1 {
 		t.Errorf("expected World's End song (is_worldsend=1), got %d", songs[1].IsWorldsEnd)
+	}
+	if songs[1].IsNew != 0 {
+		t.Errorf("expected non-new song (is_new=0), got %d", songs[1].IsNew)
 	}
 
 	// seen マップ

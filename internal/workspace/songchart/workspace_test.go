@@ -494,14 +494,14 @@ func TestBuildBulkUpdateSongsSQL(t *testing.T) {
 				t.Error("UPDATE songs が含まれていません")
 			}
 
-			for _, col := range []string{"display_id", "title", "reading", "artist", "genre_id", "bpm", "released_at", "jacket", "is_worldsend"} {
+			for _, col := range []string{"display_id", "title", "reading", "artist", "genre_id", "bpm", "released_at", "jacket", "is_worldsend", "is_new"} {
 				if !strings.Contains(sql, col+" = CASE") {
 					t.Errorf("列 %s の CASE ブロックが含まれていません", col)
 				}
 			}
 
 			gotWhen := strings.Count(sql, "WHEN id = ?")
-			wantWhen := 9 * tt.wantWhenCount
+			wantWhen := 10 * tt.wantWhenCount
 			if gotWhen != wantWhen {
 				t.Errorf("WHEN 節の数: got %d, want %d", gotWhen, wantWhen)
 			}

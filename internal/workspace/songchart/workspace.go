@@ -163,6 +163,7 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 			OfficialIdx: song.OfficialIdx,
 			Jacket:      song.Jacket,
 			IsWorldsend: song.IsWorldsend,
+			IsNew:       song.IsNew,
 		}
 		if existing, exists := mysqlSongs[song.OfficialIdx]; exists {
 			songsToUpdate = append(songsToUpdate, songUpdateRecord{
@@ -301,6 +302,7 @@ type workspaceSong struct {
 	OfficialIdx string         `db:"official_idx"`
 	Jacket      sql.NullString `db:"jacket"`
 	IsWorldsend int            `db:"is_worldsend"`
+	IsNew       int            `db:"is_new"`
 	IsDeleted   int            `db:"is_deleted"`
 }
 
@@ -755,6 +757,7 @@ type songInsertRecord struct {
 	OfficialIdx string
 	Jacket      sql.NullString
 	IsWorldsend int
+	IsNew       int
 }
 
 type songUpdateRecord struct {
@@ -762,7 +765,7 @@ type songUpdateRecord struct {
 	record songInsertRecord
 }
 
-const songInsertColumnCount = 11
+const songInsertColumnCount = 12
 
 // buildBulkUpdateSongsSQL は楽曲バルク更新用の CASE 式を含む SQL 文を生成します。
 func buildBulkUpdateSongsSQL(n int) string {
@@ -829,6 +832,8 @@ func buildBulkUpdateSongsSQL(n int) string {
 	writeCoalesceBlock("jacket")
 	sb.WriteString(",\n")
 	writeDirectBlock("is_worldsend")
+	sb.WriteString(",\n")
+	writeDirectBlock("is_new")
 
 	sb.WriteString("\nWHERE id IN (")
 	for i := range n {
@@ -847,12 +852,12 @@ func buildBulkUpdateSongsSQL(n int) string {
 func buildBulkInsertSongsSQL(n int) string {
 	const queryPrefix = `
 INSERT INTO songs (
-	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_deleted
+	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_new, is_deleted
 ) VALUES `
 
 	values := make([]string, n)
 	for i := range n {
-		values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+		values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 	}
 
 	return queryPrefix + strings.Join(values, ",")
@@ -884,6 +889,7 @@ func bulkInsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 				rec.OfficialIdx,
 				nullableString(rec.Jacket),
 				rec.IsWorldsend,
+				rec.IsNew,
 				0,
 			)
 		}
@@ -911,7 +917,7 @@ func bulkUpdateMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 
 		chunk := records[start:end]
 		query := buildBulkUpdateSongsSQL(len(chunk))
-		args := make([]any, 0, len(chunk)*17)
+		args := make([]any, 0, len(chunk)*21)
 
 		for _, rec := range chunk {
 			args = append(args, rec.ID, rec.record.DisplayID)
@@ -939,6 +945,9 @@ func bulkUpdateMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 		}
 		for _, rec := range chunk {
 			args = append(args, rec.ID, rec.record.IsWorldsend)
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, rec.record.IsNew)
 		}
 		for _, rec := range chunk {
 			args = append(args, rec.ID)
