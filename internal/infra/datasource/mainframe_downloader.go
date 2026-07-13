@@ -199,6 +199,7 @@ func (d *MainframeDownloader) parseSheetData(data *batchGetResponse) []Mainframe
 				constStr := row[colIdx+3]
 				constValue, err := strconv.ParseFloat(constStr, 64)
 				if err != nil {
+					// メモ：「parsing \"\": invalid syntax"」←まだ定数が入力されておらず空欄なだけ
 					slog.Warn("Failed to parse constant value, skipping this chart entry",
 						"title", title,
 						"difficulty", cell,
