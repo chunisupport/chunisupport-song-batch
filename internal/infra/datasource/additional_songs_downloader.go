@@ -28,6 +28,13 @@ type additionalSongsSheetData struct {
 	Songs    []additionalSongRow    `json:"songs"`
 	Charts   []additionalChartRow   `json:"charts"`
 	WECharts []additionalWEChartRow `json:"we_charts"`
+	Courses  []additionalCourseRow  `json:"courses"`
+}
+
+type additionalCourseRow struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Class string `json:"class"`
 }
 
 // additionalSongRow は additional_songs シートの1行
@@ -100,8 +107,8 @@ func (d *AdditionalSongsDownloader) Download() error {
 
 	slog.Info("Fetching additional_songs data from Google Sheets", "sheetID", d.sheetID)
 
-	// additional_songs、additional_charts、additional_songs_charts_we の3シートを取得
-	sheetNames := []string{"additional_songs", "additional_charts", "additional_songs_charts_we"}
+	// 追加楽曲・譜面・コースの各シートを取得
+	sheetNames := []string{"additional_songs", "additional_charts", "additional_songs_charts_we", "courses"}
 
 	// データを一括取得
 	allData, err := d.batchGetSheetData(sheetNames)
@@ -115,7 +122,7 @@ func (d *AdditionalSongsDownloader) Download() error {
 		return fmt.Errorf("failed to parse sheet data: %w", err)
 	}
 
-	slog.Info("Parsed additional songs data", "songs", len(data.Songs), "charts", len(data.Charts), "we_charts", len(data.WECharts))
+	slog.Info("Parsed additional songs data", "songs", len(data.Songs), "charts", len(data.Charts), "we_charts", len(data.WECharts), "courses", len(data.Courses))
 
 	// JSONファイルとして保存
 	filename := "additional_songs.json"
@@ -173,6 +180,7 @@ func (d *AdditionalSongsDownloader) parseSheetData(data *batchGetResponse) (*add
 		Songs:    []additionalSongRow{},
 		Charts:   []additionalChartRow{},
 		WECharts: []additionalWEChartRow{},
+		Courses:  []additionalCourseRow{},
 	}
 
 	for _, valueRange := range data.ValueRanges {
@@ -198,10 +206,47 @@ func (d *AdditionalSongsDownloader) parseSheetData(data *batchGetResponse) (*add
 				return nil, fmt.Errorf("failed to parse additional_songs_charts_we: %w", err)
 			}
 			result.WECharts = weCharts
+		case "courses":
+			courses, err := d.parseCoursesSheet(valueRange.Values)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse courses: %w", err)
+			}
+			result.Courses = courses
 		}
 	}
 
 	return result, nil
+}
+
+// parseCoursesSheet は courses シートのデータを解析します。
+func (d *AdditionalSongsDownloader) parseCoursesSheet(values [][]string) ([]additionalCourseRow, error) {
+	if len(values) < 2 {
+		return []additionalCourseRow{}, nil
+	}
+
+	courses := make([]additionalCourseRow, 0, len(values)-1)
+	seenIDs := make(map[string]struct{}, len(values)-1)
+	for rowIdx, row := range values[1:] {
+		if len(row) == 0 {
+			continue
+		}
+
+		course := additionalCourseRow{
+			ID:    getString(row, 0),
+			Title: getString(row, 1),
+			Class: getString(row, 2),
+		}
+		if course.ID == "" || course.Title == "" || course.Class == "" {
+			return nil, fmt.Errorf("row %d has missing required fields", rowIdx+2)
+		}
+		if _, exists := seenIDs[course.ID]; exists {
+			return nil, fmt.Errorf("row %d has duplicate id %q", rowIdx+2, course.ID)
+		}
+		seenIDs[course.ID] = struct{}{}
+		courses = append(courses, course)
+	}
+
+	return courses, nil
 }
 
 // parseSongsSheet は additional_songs シートのデータを解析します

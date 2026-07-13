@@ -40,7 +40,8 @@ func (ai *AdditionalSongsImporter) Import(filePath string) (*ImportResult, error
 	slog.Info("Additional songs data import completed",
 		"songs", len(songsData.Songs),
 		"charts", len(songsData.Charts),
-		"we_charts", len(songsData.WECharts))
+		"we_charts", len(songsData.WECharts),
+		"courses", len(songsData.Courses))
 
 	return &ImportResult{
 		Type: DataSourceAdditionalSongs,

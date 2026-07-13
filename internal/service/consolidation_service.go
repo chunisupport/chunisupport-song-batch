@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
@@ -30,6 +32,7 @@ type ConsolidationService struct {
 	db             domainrepo.ExtendedDBExecutor
 	difficultyRepo domainrepo.DifficultyRepository
 	genreRepo      domainrepo.GenreRepository
+	courseRepo     domainrepo.CourseRepository
 	pwPepper       string
 	datasources    []string
 	opts           ConsolidationOptions
@@ -41,6 +44,7 @@ func NewConsolidationService(
 	db domainrepo.ExtendedDBExecutor,
 	difficultyRepo domainrepo.DifficultyRepository,
 	genreRepo domainrepo.GenreRepository,
+	courseRepo domainrepo.CourseRepository,
 	pwPepper string,
 	datasources []string,
 	opts ConsolidationOptions,
@@ -50,6 +54,7 @@ func NewConsolidationService(
 		db:             db,
 		difficultyRepo: difficultyRepo,
 		genreRepo:      genreRepo,
+		courseRepo:     courseRepo,
 		pwPepper:       pwPepper,
 		datasources:    datasources,
 		opts:           opts,
@@ -67,7 +72,7 @@ func (s *ConsolidationService) ConsolidateAll(ctx context.Context) error {
 		return nil
 	}
 	defer workspace.Close()
-	return s.SyncWorkspace(ctx, workspace, s.db)
+	return s.syncWorkspace(ctx, workspace, s.db, true)
 }
 
 // ConsolidateBySource は指定されたデータソースのみを統合します。
@@ -91,7 +96,7 @@ func (s *ConsolidationService) ConsolidateBySource(ctx context.Context, sourceTy
 		return nil
 	}
 	defer workspace.Close()
-	return s.SyncWorkspace(ctx, workspace, s.db)
+	return s.syncWorkspace(ctx, workspace, s.db, sourceType == "additional_songs")
 }
 
 // BuildWorkspace は対象データソースを SQLite ワークスペースに取り込みます。
@@ -101,6 +106,10 @@ func (s *ConsolidationService) BuildWorkspace(ctx context.Context) (*songchart.S
 
 // SyncWorkspace は準備済みワークスペースを MySQL に同期します。
 func (s *ConsolidationService) SyncWorkspace(ctx context.Context, workspace *songchart.SongChartWorkspace, mysql domainrepo.DBExecutor) error {
+	return s.syncWorkspace(ctx, workspace, mysql, true)
+}
+
+func (s *ConsolidationService) syncWorkspace(ctx context.Context, workspace *songchart.SongChartWorkspace, mysql domainrepo.DBExecutor, syncCourses bool) error {
 	if workspace == nil {
 		return nil
 	}
@@ -112,6 +121,31 @@ func (s *ConsolidationService) SyncWorkspace(ctx context.Context, workspace *son
 	if err := workspace.SyncToMySQL(ctx, mysql, syncOpts); err != nil {
 		return fmt.Errorf("failed to sync workspace to MySQL: %w", err)
 	}
+	if syncCourses {
+		if err := s.syncCourses(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ConsolidationService) syncCourses(ctx context.Context) error {
+	if s.sources.AdditionalSongs == nil || len(s.sources.AdditionalSongs.Courses) == 0 {
+		return nil
+	}
+
+	courses := make([]entity.Course, 0, len(s.sources.AdditionalSongs.Courses))
+	for _, course := range s.sources.AdditionalSongs.Courses {
+		courses = append(courses, entity.Course{
+			OfficialIdx: strings.TrimSpace(course.ID),
+			Name:        strings.TrimSpace(course.Title),
+			ClassName:   strings.TrimSpace(course.Class),
+		})
+	}
+	if err := s.courseRepo.SaveAll(ctx, courses); err != nil {
+		return fmt.Errorf("failed to sync courses to MySQL: %w", err)
+	}
+	slog.Info("Synchronized courses to MySQL", "count", len(courses))
 	return nil
 }
 

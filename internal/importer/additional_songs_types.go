@@ -5,6 +5,15 @@ type AdditionalSongsData struct {
 	Songs    []AdditionalSong    `json:"songs"`
 	Charts   []AdditionalChart   `json:"charts"`
 	WECharts []AdditionalWEChart `json:"we_charts"`
+	Courses  []AdditionalCourse  `json:"courses"`
+}
+
+// AdditionalCourse はコース情報シート(courses)の1行を表します。
+// シートカラム: id, title, class
+type AdditionalCourse struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Class string `json:"class"`
 }
 
 // AdditionalSong は追加楽曲シート(additional_songs)の1行を表します

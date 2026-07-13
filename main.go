@@ -292,12 +292,13 @@ func consolidateToFinalTables(ctx context.Context, db *sqlx.DB, pwPepper string,
 	// リポジトリのインスタンス生成
 	difficultyRepo := repository.NewDifficultyRepository(db)
 	genreRepo := repository.NewGenreRepository(db)
+	courseRepo := repository.NewCourseRepository(db)
 
 	opts := service.ConsolidationOptions{
 		MajorUpdate:            flags.MajorUpdate,
 		FillMissingReleaseDate: flags.FillMissingReleaseDate,
 	}
-	consolidationService := service.NewConsolidationService(db, difficultyRepo, genreRepo, pwPepper, datasourceNames(datasources), opts, sources)
+	consolidationService := service.NewConsolidationService(db, difficultyRepo, genreRepo, courseRepo, pwPepper, datasourceNames(datasources), opts, sources)
 
 	workspace, err := consolidationService.BuildWorkspace(ctx)
 	if err != nil {
