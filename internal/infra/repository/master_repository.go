@@ -53,17 +53,17 @@ func (r *courseRepositoryImpl) SaveAll(ctx context.Context, courses []entity.Cou
 		end := min(start+chunkSize, len(courses))
 		chunk := courses[start:end]
 		values := make([]string, len(chunk))
-		args := make([]any, 0, len(chunk)*3)
+		args := make([]any, 0, len(chunk)*4)
 		for i, course := range chunk {
 			classID, ok := classIDs[strings.ToLower(strings.TrimSpace(course.ClassName))]
 			if !ok {
 				return fmt.Errorf("course %q references unknown class %q", course.OfficialIdx, course.ClassName)
 			}
-			values[i] = "(?, ?, ?, 0)"
-			args = append(args, course.OfficialIdx, course.Name, classID)
+			values[i] = "(?, ?, ?, ?, 0)"
+			args = append(args, course.DisplayID.String(), course.OfficialIdx, course.Name, classID)
 		}
 
-		query := `INSERT INTO courses (official_idx, name, course_class_id, is_deleted) VALUES ` + strings.Join(values, ",") + `
+		query := `INSERT INTO courses (display_id, official_idx, name, course_class_id, is_deleted) VALUES ` + strings.Join(values, ",") + `
 ON DUPLICATE KEY UPDATE
 	name = VALUES(name),
 	course_class_id = VALUES(course_class_id),

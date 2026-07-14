@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// DisplayID は楽曲の表示用IDを表す値オブジェクト
+// DisplayID はマスタデータの表示用IDを表す値オブジェクト
 type DisplayID string
 
 // NewDisplayID は新しいDisplayIDを生成します（crypto/rand使用）

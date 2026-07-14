@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
@@ -136,11 +135,11 @@ func (s *ConsolidationService) syncCourses(ctx context.Context) error {
 
 	courses := make([]entity.Course, 0, len(s.sources.AdditionalSongs.Courses))
 	for _, course := range s.sources.AdditionalSongs.Courses {
-		courses = append(courses, entity.Course{
-			OfficialIdx: strings.TrimSpace(course.ID),
-			Name:        strings.TrimSpace(course.Title),
-			ClassName:   strings.TrimSpace(course.Class),
-		})
+		entityCourse, err := entity.NewCourse(course.ID, course.Title, course.Class)
+		if err != nil {
+			return fmt.Errorf("failed to create course %q: %w", course.ID, err)
+		}
+		courses = append(courses, entityCourse)
 	}
 	if err := s.courseRepo.SaveAll(ctx, courses); err != nil {
 		return fmt.Errorf("failed to sync courses to MySQL: %w", err)
