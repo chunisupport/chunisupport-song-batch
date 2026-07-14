@@ -18,11 +18,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type difficultyInfo struct {
-	ID   int
-	Name string
-}
-
 // diffIDToDomainDifficultyID はDBのdifficultyIDをドメインのdifficulty.IDに変換します
 func diffIDToDomainDifficultyID(id int) difficulty.ID {
 	return difficulty.ID(id)
@@ -409,14 +404,6 @@ ON CONFLICT(song_id) DO UPDATE SET
 		return fmt.Errorf("failed to bulk upsert worldsend charts: %w", err)
 	}
 	return nil
-}
-
-// nullIfEmpty は空文字列の場合にnilを返します（DB挿入用）
-func nullIfEmpty(value string) any {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return value
 }
 
 func stringPtrIfNotEmpty(value string) *string {

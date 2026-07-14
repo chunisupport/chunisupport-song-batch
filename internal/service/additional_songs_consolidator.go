@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
@@ -623,25 +622,4 @@ ON CONFLICT(song_id) DO UPDATE SET
 		return fmt.Errorf("failed to bulk upsert WORLD'S END charts: %w", err)
 	}
 	return nil
-}
-
-// normalizeReleaseDate はリリース日文字列をYYYY-MM-DD形式に正規化します
-// フォーマット: YYYY/MM/DD または YYYY-MM-DD
-func normalizeReleaseDate(dateStr string) (string, error) {
-	// 複数のフォーマットを試行
-	formats := []string{
-		"2006/01/02",
-		"2006-01-02",
-		"2006/1/2",
-		"2006-1-2",
-	}
-
-	for _, format := range formats {
-		if t, err := time.Parse(format, dateStr); err == nil {
-			// YYYY-MM-DD形式で返却
-			return t.Format("2006-01-02"), nil
-		}
-	}
-
-	return "", fmt.Errorf("unable to parse date: %s", dateStr)
 }

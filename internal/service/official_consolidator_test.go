@@ -13,11 +13,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// mockDB は DBorTx インターフェースのモック実装
-type mockDB struct {
-	*sqlx.DB
-}
-
 // mockDifficultyRepo はテスト用の DifficultyRepository モック
 type mockDifficultyRepo struct{}
 
