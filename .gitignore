@@ -48,6 +48,7 @@ go.work
 # Secrets, Settings
 .config/
 *.env*
+!.env.example
 *.settings.json
 
 # Data

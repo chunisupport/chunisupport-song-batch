@@ -44,7 +44,11 @@ FLUSH PRIVILEGES;
 > **注意:** 本リポジトリには MySQL のテーブル定義が含まれていません。必要なスキーマはチーム内で管理している情報を適用してください。
 
 ### 3. 環境変数の設定
-`.env` またはシェル環境に以下の環境変数を設定します。mainframe 用の値が不要な場合、省略可能です。
+`.env.example` をコピーして `.env` を作成するか、シェル環境に以下の環境変数を設定します。mainframe 用の値が不要な場合、省略可能です。
+
+```bash
+cp .env.example .env
+```
 
 `--major-update` を利用する場合は、`CHUNISUPPORT_BATCH_OFFICIAL_URL` と `CHUNISUPPORT_BATCH_ADDITIONAL_SONGS_SHEET_ID`（および Google Sheets 関連の環境変数）が必須です。
 
