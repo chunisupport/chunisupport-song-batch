@@ -566,7 +566,7 @@ func buildBulkUpdateWorldsendChartsSQL(n int) string {
 	sb.WriteString(",\n")
 	writeCaseBlock("notes", "COALESCE(?, notes)")
 	sb.WriteString(",\n")
-	writeCaseBlock("notes_designer", "COALESCE(?, notes_designer)")
+	writeCaseBlock("notes_designer", "COALESCE(notes_designer, ?)")
 
 	sb.WriteString("\nWHERE song_id IN (")
 	for i := range n {

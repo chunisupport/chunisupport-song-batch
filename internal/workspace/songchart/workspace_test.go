@@ -641,10 +641,11 @@ func TestBuildBulkUpdateWorldsendChartsSQL(t *testing.T) {
 				t.Errorf("WHEN 節の数: got %d, want %d", gotWhen, wantWhen)
 			}
 
-			// COALESCE の数を確認 (4列 × n件)
-			gotCoalesce := strings.Count(sql, "COALESCE(?")
-			if gotCoalesce != wantWhen {
-				t.Errorf("COALESCE の数: got %d, want %d", gotCoalesce, wantWhen)
+			if got, want := strings.Count(sql, "COALESCE(?"), 3*tt.n; got != want {
+				t.Errorf("入力値優先のCOALESCE数: got %d, want %d", got, want)
+			}
+			if got, want := strings.Count(sql, "COALESCE(notes_designer, ?)"), tt.n; got != want {
+				t.Errorf("既存譜面製作者優先のCOALESCE数: got %d, want %d", got, want)
 			}
 
 			// WHERE IN の ? の数を確認
@@ -657,5 +658,55 @@ func TestBuildBulkUpdateWorldsendChartsSQL(t *testing.T) {
 				t.Errorf("WHERE IN の ? の数: got %d, want %d", gotWhere, tt.wantWhereCount)
 			}
 		})
+	}
+}
+
+func TestBulkUpdateMySQLWorldsendCharts_PreservesExistingNotesDesigner(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := NewSongChartWorkspace(ctx, Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("ワークスペースの作成に失敗しました: %v", err)
+	}
+	defer ws.Close()
+
+	if _, err := ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, artist, genre_id, official_idx, is_worldsend, is_deleted)
+		VALUES
+			(1, 'existing', 'Existing', 'Artist', 1, '1', 1, 0),
+			(2, 'missing', 'Missing', 'Artist', 1, '2', 1, 0)
+	`); err != nil {
+		t.Fatalf("楽曲の準備に失敗しました: %v", err)
+	}
+	if _, err := ws.DB().ExecContext(ctx, `
+		INSERT INTO worldsend_charts (song_id, notes_designer)
+		VALUES (1, 'Existing Designer'), (2, NULL)
+	`); err != nil {
+		t.Fatalf("譜面の準備に失敗しました: %v", err)
+	}
+
+	records := []worldsendChartUpdateRecord{
+		{SongID: 1, NotesDesigner: sql.NullString{String: "Incoming Designer", Valid: true}},
+		{SongID: 2, NotesDesigner: sql.NullString{String: "Incoming Designer", Valid: true}},
+	}
+	if err := bulkUpdateMySQLWorldsendCharts(ctx, ws.DB(), records, len(records)); err != nil {
+		t.Fatalf("WORLD'S END譜面の更新に失敗しました: %v", err)
+	}
+
+	var designers []sql.NullString
+	if err := ws.DB().SelectContext(ctx, &designers, `SELECT notes_designer FROM worldsend_charts ORDER BY song_id`); err != nil {
+		t.Fatalf("譜面製作者の取得に失敗しました: %v", err)
+	}
+	if len(designers) != 2 {
+		t.Fatalf("譜面製作者の件数: got %d, want 2", len(designers))
+	}
+	if got, want := designers[0].String, "Existing Designer"; got != want {
+		t.Errorf("既存の譜面製作者: got %q, want %q", got, want)
+	}
+	if got, want := designers[1].String, "Incoming Designer"; got != want {
+		t.Errorf("未設定の譜面製作者: got %q, want %q", got, want)
 	}
 }
