@@ -1,0 +1,92 @@
+name: Build and Upload Artifact
+
+on:
+  push:
+    branches:
+      - beta
+      - develop
+      - main
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Discord Notification (Build Start)
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ github.ref_name == 'main' && secrets.DISCORD_WEBHOOK_URL_PRODUCTION || github.ref_name == 'beta' && secrets.DISCORD_WEBHOOK_URL_BETA || secrets.DISCORD_WEBHOOK_URL_STAGING }}
+          DISCORD_NOTIFY_MODE: build-start
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || 'N/A' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET_ARCH: ${{ matrix.goarch }}
+          DISCORD_MESSAGE_ID_PATH: .discord/message_id
+        run: python .github/scripts/discord_webhook.py
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.0'
+
+      - name: Determine target
+        id: target
+        run: |
+          ARCH="${{ matrix.goarch }}"
+          echo "goarch=${ARCH}" >> "$GITHUB_OUTPUT"
+          echo "binary_name=chunisupport-song-batch-linux-${ARCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        id: build-binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: ${{ steps.target.outputs.goarch }}
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w" \
+            -o "${{ steps.target.outputs.binary_name }}" .
+
+      - name: Package binary
+        id: package
+        run: |
+          tar -czf "${{ steps.target.outputs.binary_name }}.tar.gz" \
+            "${{ steps.target.outputs.binary_name }}"
+
+      - name: Upload artifact
+        id: upload-artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.target.outputs.binary_name }}.tar.gz
+          archive: false
+          overwrite: true
+          retention-days: 3
+
+      - name: Discord Notification (Build Complete)
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ github.ref_name == 'main' && secrets.DISCORD_WEBHOOK_URL_PRODUCTION || github.ref_name == 'beta' && secrets.DISCORD_WEBHOOK_URL_BETA || secrets.DISCORD_WEBHOOK_URL_STAGING }}
+          DISCORD_NOTIFY_MODE: build-complete
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || 'N/A' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_RESULT: ${{ steps.build-binary.outcome == 'success' && steps.package.outcome == 'success' && steps.upload-artifact.outcome == 'success' && 'success' || 'failure' }}
+          TARGET_ARCH: ${{ matrix.goarch }}
+          DISCORD_MESSAGE_ID_PATH: .discord/message_id
+        run: python .github/scripts/discord_webhook.py

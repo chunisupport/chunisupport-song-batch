@@ -69,3 +69,4 @@ schema_dump.sql
 .serena/
 
 Taskfile.yml
+*.pyc
