@@ -67,8 +67,7 @@ func (w WeStar) IntPtr() *int {
 	if w == 0 {
 		return nil
 	}
-	v := int(w)
-	return &v
+	return new(int(w))
 }
 
 // IsZero はWeStarが未設定かどうかを返します

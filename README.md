@@ -20,7 +20,7 @@ ChuniSupport Song Batch は、アーケードゲーム「チュウニズム」�
 - `internal/workspace`: SQLite ワークスペースと MySQL 同期処理
 
 ## 動作要件
-- Go 1.25.1（`go.mod` を参照）
+- Go 1.27.0（`go.mod` を参照）
 - MySQL 8 互換データベース（`parseTime=true` オプションで接続）
 - 外部データソースにアクセス可能なネットワーク
 - mainframe データソースを利用する場合は Google Cloud API キーと対象スプレッドシート ID

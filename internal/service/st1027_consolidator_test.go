@@ -42,8 +42,8 @@ func TestSt1027BulkUpdateChartNotes_InitialInsert(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Basic:    importer.St1027Chart{NotesAll: ptr(500)},
-				Advanced: importer.St1027Chart{NotesAll: ptr(800)},
+				Basic:    importer.St1027Chart{NotesAll: new(500)},
+				Advanced: importer.St1027Chart{NotesAll: new(800)},
 			},
 		},
 	}
@@ -111,8 +111,8 @@ func TestSt1027BulkUpdateChartNotes_NoUpdateExisting(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Basic:    importer.St1027Chart{NotesAll: ptr(500)},
-				Advanced: importer.St1027Chart{NotesAll: ptr(800)},
+				Basic:    importer.St1027Chart{NotesAll: new(500)},
+				Advanced: importer.St1027Chart{NotesAll: new(800)},
 			},
 		},
 	}
@@ -180,7 +180,7 @@ func TestSt1027BulkUpdateChartNotes_NoOverwriteWithZero(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Basic: importer.St1027Chart{NotesAll: ptr(0)},
+				Basic: importer.St1027Chart{NotesAll: new(0)},
 			},
 		},
 	}
@@ -232,7 +232,7 @@ func TestSt1027BulkUpdateSongBPMs_InitialInsert(t *testing.T) {
 			{
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
-					BPM:        ptr(180),
+					BPM:        new(180),
 				},
 			},
 		},
@@ -285,7 +285,7 @@ func TestSt1027BulkUpdateSongBPMs_NoOverwriteExisting(t *testing.T) {
 			{
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
-					BPM:        ptr(180),
+					BPM:        new(180),
 				},
 			},
 		},
@@ -338,7 +338,7 @@ func TestSt1027BulkUpdateSongBPMs_NoOverwriteWithZero(t *testing.T) {
 			{
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
-					BPM:        ptr(0),
+					BPM:        new(0),
 				},
 			},
 		},
@@ -399,11 +399,11 @@ func TestSt1027Consolidator_Consolidate_FullFlow(t *testing.T) {
 			{
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
-					BPM:        ptr(180),
+					BPM:        new(180),
 				},
 				Expert: importer.St1027Chart{
-					NotesAll:      ptr(900),
-					Notesdesigner: ptrString("Techno Kitchen"),
+					NotesAll:      new(900),
+					Notesdesigner: new("Techno Kitchen"),
 				},
 			},
 		},
@@ -476,8 +476,8 @@ func TestSt1027BulkUpdateChartNotesDesigner_InitialInsert(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Expert: importer.St1027Chart{Notesdesigner: ptrString("Techno Kitchen")},
-				Master: importer.St1027Chart{Notesdesigner: ptrString("Jack")},
+				Expert: importer.St1027Chart{Notesdesigner: new("Techno Kitchen")},
+				Master: importer.St1027Chart{Notesdesigner: new("Jack")},
 			},
 		},
 	}
@@ -545,8 +545,8 @@ func TestSt1027BulkUpdateChartNotesDesigner_SkipQuestionMark(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Expert: importer.St1027Chart{Notesdesigner: ptrString("?")},
-				Master: importer.St1027Chart{Notesdesigner: ptrString("Techno Kitchen + ?")},
+				Expert: importer.St1027Chart{Notesdesigner: new("?")},
+				Master: importer.St1027Chart{Notesdesigner: new("Techno Kitchen + ?")},
 			},
 		},
 	}
@@ -614,7 +614,7 @@ func TestSt1027BulkUpdateChartNotesDesigner_NoUpdateExisting(t *testing.T) {
 				Meta: importer.St1027Meta{
 					OfficialID: "OFF001",
 				},
-				Expert: importer.St1027Chart{Notesdesigner: ptrString("New Designer")},
+				Expert: importer.St1027Chart{Notesdesigner: new("New Designer")},
 			},
 		},
 	}
@@ -639,8 +639,4 @@ func TestSt1027BulkUpdateChartNotesDesigner_NoUpdateExisting(t *testing.T) {
 	if designer == nil || *designer != "Existing Designer" {
 		t.Errorf("expected notes_designer to remain Existing Designer, got %v", designer)
 	}
-}
-
-func ptrString(v string) *string {
-	return &v
 }

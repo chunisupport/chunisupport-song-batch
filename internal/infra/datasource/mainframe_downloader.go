@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -232,10 +233,5 @@ func (d *MainframeDownloader) parseSheetData(data *batchGetResponse) []Mainframe
 
 // isDifficultyShort は文字列が難易度の略称かどうかを判定します
 func isDifficultyShort(s string) bool {
-	for _, diff := range chunithmDifficultiesShort {
-		if s == diff {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(chunithmDifficultiesShort, s)
 }

@@ -43,8 +43,7 @@ func (r ReleaseDate) StringPtr() *string {
 	if r == "" {
 		return nil
 	}
-	s := string(r)
-	return &s
+	return new(string(r))
 }
 
 // IsEmpty はReleaseDateが空かどうかを返します

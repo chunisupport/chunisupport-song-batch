@@ -266,14 +266,14 @@ func (d *AdditionalSongsDownloader) parseSongsSheet(values [][]string) ([]additi
 			continue
 		}
 
-		song := additionalSongRow{}
-
-		// 必須フィールドのバリデーション
-		song.ID = getString(row, 0)
-		song.Title = getString(row, 1)
-		song.Artist = getString(row, 2)
-		song.Genre = getString(row, 3)
-		song.Release = getString(row, 4)
+		// 必須フィールド
+		song := additionalSongRow{
+			ID:      getString(row, 0),
+			Title:   getString(row, 1),
+			Artist:  getString(row, 2),
+			Genre:   getString(row, 3),
+			Release: getString(row, 4),
+		}
 
 		// 必須フィールドチェック
 		if song.ID == "" || song.Title == "" || song.Artist == "" || song.Genre == "" || song.Release == "" {
@@ -339,14 +339,14 @@ func (d *AdditionalSongsDownloader) parseChartsSheet(values [][]string) ([]addit
 			continue
 		}
 
-		chart := additionalChartRow{}
-
 		// 必須フィールド
-		chart.ID = getString(row, 0)
-		chart.Diff = getString(row, 1)
-		chart.Const = getFloatPtr(row, 2)
-		chart.CsUK = getBool(row, 3)
-		chart.Notes = getIntPtr(row, 4)
+		chart := additionalChartRow{
+			ID:    getString(row, 0),
+			Diff:  getString(row, 1),
+			Const: getFloatPtr(row, 2),
+			CsUK:  getBool(row, 3),
+			Notes: getIntPtr(row, 4),
+		}
 
 		// 必須フィールドチェック
 		if chart.ID == "" || chart.Diff == "" || chart.Const == nil {
@@ -374,18 +374,18 @@ func (d *AdditionalSongsDownloader) parseWEChartsSheet(values [][]string) ([]add
 			continue
 		}
 
-		weChart := additionalWEChartRow{}
-
 		// 必須フィールド
-		weChart.ID = getString(row, 0)
-		weChart.Title = getString(row, 1)
-		weChart.Artist = getString(row, 2)
-		weChart.Genre = getString(row, 3)
-		weChart.Release = getString(row, 4)
-		weChart.WEKanji = getString(row, 5)
-		weChart.WEStar = getIntPtr(row, 6)
-		weChart.Notes = getIntPtr(row, 7)
-		weChart.Img = getString(row, 8)
+		weChart := additionalWEChartRow{
+			ID:      getString(row, 0),
+			Title:   getString(row, 1),
+			Artist:  getString(row, 2),
+			Genre:   getString(row, 3),
+			Release: getString(row, 4),
+			WEKanji: getString(row, 5),
+			WEStar:  getIntPtr(row, 6),
+			Notes:   getIntPtr(row, 7),
+			Img:     getString(row, 8),
+		}
 
 		// 必須フィールドチェック
 		if weChart.ID == "" || weChart.Title == "" || weChart.Artist == "" || weChart.Genre == "" || weChart.Release == "" {
@@ -404,10 +404,8 @@ func (d *AdditionalSongsDownloader) parseWEChartsSheet(values [][]string) ([]add
 func extractSheetName(rangeStr string) string {
 	// "additional_songs!A1:Z1000" -> "additional_songs"
 	// "additional_songs" -> "additional_songs"
-	if idx := strings.Index(rangeStr, "!"); idx != -1 {
-		return rangeStr[:idx]
-	}
-	return rangeStr
+	before, _, _ := strings.Cut(rangeStr, "!")
+	return before
 }
 
 // getString は行から指定インデックスの文字列を取得します
@@ -431,7 +429,7 @@ func getIntPtr(row []string, idx int) *int {
 	if v == 0 {
 		return nil // 0はnullとして扱う
 	}
-	return &v
+	return new(v)
 }
 
 // getFloatPtr は行から指定インデックスの浮動小数点ポインタを取得します
@@ -447,7 +445,7 @@ func getFloatPtr(row []string, idx int) *float64 {
 	if v == 0 {
 		return nil // 0はnullとして扱う
 	}
-	return &v
+	return new(v)
 }
 
 // getBool は行から指定インデックスのbool値を取得します

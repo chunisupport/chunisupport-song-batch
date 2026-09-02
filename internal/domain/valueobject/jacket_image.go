@@ -12,9 +12,7 @@ func NewJacketImage(s string) JacketImage {
 		return ""
 	}
 	// 拡張子を除去
-	if dotIndex := strings.LastIndex(s, "."); dotIndex != -1 {
-		s = s[:dotIndex]
-	}
+	s, _, _ = strings.CutLast(s, ".")
 	return JacketImage(s)
 }
 

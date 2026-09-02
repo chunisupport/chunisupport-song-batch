@@ -265,7 +265,7 @@ func (c *OfficialConsolidator) detectMassiveIdxChange(ctx context.Context, exist
 		if len(suspiciousChanges) > 0 {
 			displayCount := min(len(suspiciousChanges), 20)
 			slog.Error("Detected official_idx changes (showing first 20):")
-			for i := 0; i < displayCount; i++ {
+			for i := range displayCount {
 				slog.Error(suspiciousChanges[i])
 			}
 			if len(suspiciousChanges) > 20 {
@@ -411,7 +411,7 @@ func stringPtrIfNotEmpty(value string) *string {
 	if trimmed == "" {
 		return nil
 	}
-	return &trimmed
+	return new(trimmed)
 }
 
 func (c *OfficialConsolidator) loadActiveOfficialSongs(ctx context.Context) (map[string]int, error) {

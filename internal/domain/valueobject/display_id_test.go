@@ -19,7 +19,7 @@ func TestNewDisplayID(t *testing.T) {
 
 	t.Run("正常系: 生成されるIDはユニーク", func(t *testing.T) {
 		seen := make(map[string]struct{})
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			id, err := valueobject.NewDisplayID()
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)

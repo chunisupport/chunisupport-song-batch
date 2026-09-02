@@ -37,8 +37,7 @@ func (w WeKanji) StringPtr() *string {
 	if w == "" {
 		return nil
 	}
-	s := string(w)
-	return &s
+	return new(string(w))
 }
 
 // IsEmpty はWeKanjiが空かどうかを返します

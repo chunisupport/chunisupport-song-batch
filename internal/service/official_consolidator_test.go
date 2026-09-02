@@ -173,7 +173,7 @@ func TestDetectMassiveIdxChange(t *testing.T) {
 
 	// 新しいデータ: 10曲以上の official_idx が変更されている
 	newData := make(importer.OfficialData, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		newData[i] = importer.OfficialSong{
 			ID:     fmt.Sprintf("NEW%03d", i+1), // OLD001 → NEW001 に変更
 			Title:  fmt.Sprintf("Title %d", i+1),
@@ -252,7 +252,7 @@ func TestDetectMassiveIdxChange_NoChange(t *testing.T) {
 
 	// 新しいデータ: official_idx に変更なし
 	newData := make(importer.OfficialData, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		newData[i] = importer.OfficialSong{
 			ID:     fmt.Sprintf("OFF%03d", i+1),
 			Title:  fmt.Sprintf("Title %d", i+1),
