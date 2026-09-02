@@ -6,8 +6,8 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
-	golang.org/x/sync v0.20.0
-	golang.org/x/text v0.30.0
+	golang.org/x/sync v0.21.0
+	golang.org/x/text v0.39.0
 	modernc.org/sqlite v1.39.1
 )
 
