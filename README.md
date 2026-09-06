@@ -4,18 +4,20 @@
 ChuniSupport Song Batch は、アーケードゲーム「チュウニズム」の譜面データを定期的に取得し、MySQL データベースへ統合するための Go 製バッチアプリケーションです。複数の外部データソースから JSON をダウンロードし、インポートした内容を SQLite ワークスペースで統合したあと MySQL に同期します。アプリケーションのエントリーポイントは `main.go` に実装されています。
 
 ## 主な処理フロー
-1. **データソース解決** – サポート対象の全データソースを環境変数から解決します。
-2. **データダウンロード** – `internal/infra/datasource.Downloader` が `.datasources/` 配下に JSON ファイルを保存します。mainframe は Google Sheets から専用ロジックで取得します。
-3. **インポート** – データソースごとのインポーターが JSON を読み取り、共通 DTO に変換します。
-4. **ワークスペース統合** – `service.ConsolidationService` が SQLite ワークスペースを構築し、全ソースのデータを統合します。
-5. **MySQL 同期** – トランザクション内で最終テーブルに upsert し、必要に応じてワークスペースダンプを出力します。
+1. **ロック** – 全起動経路で MySQL アドバイザリロック `chunisupport:song-batch` を取得します。通常 cron と `--fill-missing-release-date` は競合時にスキップ（終了コード 0）、`--major-update` と `--skip-download` はエラー終了します。
+2. **データソース解決** – 通常実行はサポート対象を解決します。`--major-update` は official と additional_songs だけを対象にします。
+3. **データダウンロード** – 実行専用の一時ディレクトリへ取得します。成功分だけをインポートし、終了後に一時ディレクトリを削除します。st1027 / otoge-db は取得失敗時に `.datasources/` の last-known-good を使います。
+4. **インポート** – データソースごとのインポーターが JSON を読み取り、共通 DTO に変換します。
+5. **ワークスペース統合** – `service.ConsolidationService` が SQLite ワークスペースを構築し、全ソースのデータを統合します。
+6. **MySQL 同期** – トランザクション内で最終テーブルに upsert します。必須データソースの今回取得・解析に失敗した場合は同期しません。
 
 ## リポジトリ構成
-- `main.go`: バッチアプリケーションのエントリーポイント
+- `main.go`: フラグ解析、DB 接続、ロック、ユースケースの起動
+- `internal/usecase`: 取得・必須判定・インポート・統合の実行
 - `internal/config`: 環境変数・フラグの読み込み
 - `internal/datasource`: データソース定義とレジストリ
 - `internal/importer`: JSON 取り込みと DTO 定義
-- `internal/infra`: ダウンローダー、DB 接続、リポジトリ実装
+- `internal/infra`: ダウンローダー、DB 接続、アドバイザリロック、リポジトリ実装
 - `internal/service`: データ統合とトランザクション管理
 - `internal/workspace`: SQLite ワークスペースと MySQL 同期処理
 
@@ -71,8 +73,10 @@ cp .env.example .env
 
 mainframe のデータソースでは API キーとシート ID をもとに Google Sheets API を利用します。
 ### 4. データソース JSON の扱い
-- 初回実行時に `.datasources/` ディレクトリが生成され、各種 JSON が保存されます。
-- `--skip-download` フラグを指定すると既存ファイルを利用します。社内で共有されているサンプル JSON がある場合は `.datasources/<type>.json` として配置してください。
+- 通常のダウンロード実行は `.datasources/` を入力にしません。取得先は実行ごとの一時ディレクトリです。
+- 同期に成功した取得ファイルは last-known-good として `.datasources/<type>.json` へ保存します。
+- `--skip-download` を指定したときだけ `.datasources/` の既存ファイルを入力にします。社内で共有されているサンプル JSON がある場合は `.datasources/<type>.json` として配置してください。
+- 通常実行の必須ファイルは `official.json`、`additional_songs.json`、`mainframe.json` です。`--major-update` では `official.json` と `additional_songs.json` だけが必須です。
 
 ## 実行方法
 ```bash
@@ -82,8 +86,8 @@ go run . --skip-download=false
 
 | フラグ | 説明 |
 | --- | --- |
-| `--skip-download` | true の場合、ダウンロードをスキップして既存 JSON を使用します |
-| `--major-update` | 大型アップデート用のモード。公式データと追加楽曲のみを使用し、定数更新ルールを適用します |
+| `--skip-download` | true の場合、ダウンロードをスキップして `.datasources/` の既存 JSON を使用します |
+| `--major-update` | 大型アップデート用のモード。公式データと追加楽曲のみを解決・取得し、定数更新ルールを適用します |
 | `--fill-missing-release-date` | 特定フラグ有効時、いずれのデータソースからも日付が補完されずMySQLに楽曲自体が存在しない（brand new）場合に実行日（JST）をreleased_atへ補完します。otoge-db等で日付が得られない場合の最終フォールバック用 |
 
 ## `display_id` の生成
@@ -98,8 +102,9 @@ go test ./...
 ```
 
 ## トラブルシューティング
-- **データソース解決に失敗する**: いずれかのデータソースに必要な環境変数が未設定の可能性があります。ログを確認し、該当 URL や API キーを設定してください。
+- **データソース解決に失敗する**: 必須データソース（通常実行は official / additional_songs / mainframe、大型更新は official / additional_songs）の環境変数が未設定の可能性があります。
 - **MySQL 接続に失敗する**: 接続情報（ホスト、ポート、ユーザー、パスワード）と MySQL が起動しているかを確認してください。
-- **mainframe ダウンロードが失敗する**: `.datasources/mainframe.json` を削除し、Google API キーとシート ID が正しいかを確認したうえで再実行してください。
+- **必須データソースのダウンロードが失敗する**: 前回の `.datasources/` は使いません。429/502/503/504 は数回再試行します。mainframe と additional_songs は同じ API キーを直列に呼びます。それでも失敗する場合は API キー・シート ID・URL を確認してください。
+- **別プロセスが実行中**: 通常 cron は終了コード 0 でスキップします。`--major-update` や `--skip-download` はエラー終了します。
 
 ライセンスに関する情報は `LICENSE` を参照してください。

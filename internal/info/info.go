@@ -9,6 +9,12 @@ const (
 	ResourceDir = ".resources/"
 	// MigrationDir はマイグレーションファイルのディレクトリです。
 	MigrationDir = "migration/sql/"
+	// DatasourceCacheDir は last-known-good と --skip-download 用の固定ディレクトリです。
+	DatasourceCacheDir = ".datasources"
+	// TempDirPrefix は実行専用一時ディレクトリの MkdirTemp パターンです。
+	TempDirPrefix = "chunisupport-song-batch-*"
+	// SongBatchLockName は song-batch 全体で共有する MySQL アドバイザリロック名です。
+	SongBatchLockName = "chunisupport:song-batch"
 )
 
 const (

@@ -112,7 +112,7 @@
 | `internal/config/flags.go` | `--skip-download` / `--major-update` / `--fill-missing-release-date` |
 | ロック | 未実装 |
 
-`--skip-download` は「既存 JSON を明示利用する」ためのフラグとして残す。この経路だけが `.datasources/` を使ってよい。
+`--skip-download` は「既存 JSON を明示利用する」ためのフラグとして残す。通常実行が前回ファイルを暗黙再利用する経路は残さない。st1027 / otoge-db の last-known-good と、同期成功後のキャッシュ書き込みだけが `.datasources/` を使う。
 
 ---
 
@@ -129,12 +129,13 @@ os.MkdirTemp("", "chunisupport-song-batch-*")
 規則:
 
 - 今回成功したファイルだけをそのディレクトリへ書く
-- Importer はそのディレクトリ内のファイルだけを読む
+- Importer は今回成功した一時ファイル、または complementary の last-known-good だけを読む
 - 処理終了後にディレクトリを削除する。成功・失敗を問わない
 - プロセスが強制終了して残っても、次回実行の入力には使わない
-- 固定 `.datasources/` へ書き込まない
+- 同期成功後、今回成功したファイルを `.datasources/` へ last-known-good として昇格する
+- last-known-good の昇格は同じディレクトリの一時ファイルへ書き込み、書き込み完了後に置き換える。昇格失敗時は既存ファイルを維持する
 
-`--skip-download` を明示したときだけ `.datasources/` を読む。この場合はダウンロードせず、既存ファイルを入力とする。通常実行が前回ファイルを暗黙再利用する経路を残さない。
+`--skip-download` を明示したとき、および st1027 / otoge-db の取得失敗時だけ `.datasources/` を読む。official / additional_songs / mainframe は失敗時にキャッシュを使わず全体停止する。
 
 一時ディレクトリのパスはログに出してよい。中身の JSON 本文は出さない。
 
@@ -151,16 +152,16 @@ os.MkdirTemp("", "chunisupport-song-batch-*")
 - バイト数（成功時）
 - 失敗理由（失敗時。外部レスポンス本文は含めない）
 
-Importer へ渡す対象は、今回成功したデータソースだけとする。解決には成功したが取得に失敗したデータソースは、存在しないものとして扱う。前回ファイルを探さない。
+Importer へ渡す対象は、今回成功したデータソースと、st1027 / otoge-db の last-known-good だけとする。official / additional_songs / mainframe は取得失敗時に前回ファイルを探さない。
 
-全件失敗の扱いはモードの必須条件に従う。通常モードで 1 件も成功しなければ MySQL を変更せず終了する。
+全件失敗の扱いはモードの必須条件に従う。必須データソースが欠けていれば MySQL を変更せず終了する。
 
 ### 5.3 モード別の必須条件
 
 | モード | 解決・取得対象 | 必須データソース | 失敗時 |
 |---|---|---|---|
-| 通常 | 解決できたすべてのデータソース | なし | 成功したデータソースだけを統合する。0 件なら DB 変更なし |
-| 大型更新 | official、additional_songs のみ | official、additional_songs | どちらかの解決・取得・解析失敗で全体失敗。DB 変更なし |
+| 通常 | 解決できたすべてのデータソース | official、additional_songs、mainframe | 必須の解決・取得・解析失敗で全体失敗。DB 変更なし。st1027 / otoge-db は last-known-good を使ってよい |
+| 大型更新 | official、additional_songs のみ | official、additional_songs | どちらかの解決・取得・解析失敗で全体失敗。DB 変更なし。mainframe は解決も取得もしない |
 | `--skip-download` | CLI が指定する既存ファイル | そのモードの必須条件を同じファイル集合へ適用 | 必須ファイルが無い、または解析不能なら DB 変更なし |
 
 大型更新では、対象外データソースを解決・ダウンロードしてから除外しない。最初から official と additional_songs だけを対象にする。
@@ -325,11 +326,13 @@ type RunRequest struct {
 
 呼び出し側は結果集合から成功分だけを Importer に渡す。Downloader は前回ディレクトリを見ない。渡された `outputDir` にだけ書く。
 
+`DownloadAll` は `context.Context` を受け取り、HTTP リクエスト、Google Sheets の直列実行待ち、リトライ待機へキャンセルを伝播する。バッチ起動時には割り込み・終了シグナルから生成したコンテキストを渡す。
+
 既存テスト `TestDownloader_DownloadAll_ErrorHandling` は「一部失敗でも error が nil」を期待している。この期待は新しい結果集合契約へ置き換える。一部失敗は全体 error ではなく、失敗した要素の `Success=false` として表す。テストケース自体が検証している「失敗ファイルを書かない」は残す。
 
 ### 7.2 データソース解決
 
-通常モード: 現行どおり、解決失敗したデータソースは警告してスキップする。
+通常モード: official、additional_songs、mainframe の解決失敗は全体失敗とする。st1027、otoge-db の解決失敗は警告し、last-known-good があれば使用し、無ければそのソースをスキップする。
 
 大型更新モード: official と additional_songs だけを解決する。どちらかが解決できなければ、その時点で失敗する。st1027 / mainframe / otoge-db の環境変数欠如は大型更新の失敗理由にしない。
 
@@ -337,7 +340,7 @@ type RunRequest struct {
 
 入力は「種別とファイルパス」の成功リストだけとする。解決済み一覧を再走査して固定パスを組み立てない。
 
-ファイルが無い、JSON が空、解析不能は、そのデータソースの失敗とする。通常モードならそのソースを除く。大型更新なら全体失敗とする。
+ファイルが無い、JSON が空、解析不能は、そのデータソースの失敗とする。通常モードでは official、additional_songs、mainframe の失敗なら全体失敗とし、st1027、otoge-db の失敗なら last-known-good を試して、利用できなければそのソースを除く。大型更新では対象となる official、additional_songs のどちらが失敗しても全体失敗とする。
 
 ### 7.4 同期の開始条件
 
@@ -370,8 +373,8 @@ MySQL トランザクションは、モードの必須条件を満たしたあ�
 |---|---|---|
 | 通常 cron がロックを取得できない | 変更なし | 終了コード 0 |
 | `--major-update` がロックを取得できない | 変更なし | 非 0 |
-| 通常実行で一部データソース取得失敗 | 成功分だけ同期 | 成功終了。失敗はログ |
-| 通常実行で取得成功 0 件 | 変更なし | 非 0 |
+| 通常実行で st1027 / otoge-db 取得失敗 | last-known-good があればそれを使い同期。無ければそのソースだけスキップ | 必須が揃っていれば成功終了 |
+| 通常実行で official / additional_songs / mainframe 取得失敗 | 変更なし | 非 0 |
 | 大型更新で official 解決・取得・解析失敗 | 変更なし | 非 0 |
 | 大型更新で additional_songs 解決・取得・解析失敗 | 変更なし | 非 0 |
 | `--skip-download` で必須ファイル欠落 | 変更なし | 非 0 |
@@ -389,14 +392,14 @@ MySQL トランザクションは、モードの必須条件を満たしたあ�
 維持するもの:
 
 - フラグ名 `--skip-download`、`--major-update`、`--fill-missing-release-date`
-- 通常実行が「取れたデータソースだけ統合する」こと
+- 通常実行が「取れた補完ソースだけ統合する」こと
 - 大型更新が official と additional_songs だけを統合し、定数不明化ルールを使うこと
 - 既存 cron の起動コマンドと時刻
 
 変わるもの:
 
-- 通常実行が `.datasources/` を作らなくなる
-- ダウンロード失敗時に前回 JSON を読まなくなる
+- 通常実行の入力は一時ディレクトリになり、`.datasources/` は last-known-good と `--skip-download` 専用になる
+- official / additional_songs / mainframe のダウンロード失敗時に前回 JSON を読まなくなる
 - 大型更新が対象外データソースを解決・取得しなくなる
 - 実行中は他の song-batch が開始されない
 - 通常 cron がロック競合でスキップすることがある（終了コード 0）

@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -99,7 +100,7 @@ func TestMainframeDownloader_Download_Integration(t *testing.T) {
 
 	downloader := NewMainframeDownloader(tempDir, apiKey, sheetID, "https://sheets.googleapis.com/v4/spreadsheets")
 
-	err := downloader.Download()
+	err := downloader.Download(context.Background())
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}

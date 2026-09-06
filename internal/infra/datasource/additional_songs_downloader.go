@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -100,7 +101,7 @@ func NewAdditionalSongsDownloader(outputDir, apiKey, sheetID, baseURL string) *A
 }
 
 // Download はGoogleスプレッドシートからデータをダウンロードし、JSONファイルとして保存します
-func (d *AdditionalSongsDownloader) Download() error {
+func (d *AdditionalSongsDownloader) Download(ctx context.Context) error {
 	if err := os.MkdirAll(d.outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -111,7 +112,7 @@ func (d *AdditionalSongsDownloader) Download() error {
 	sheetNames := []string{"additional_songs", "additional_charts", "additional_songs_charts_we", "courses"}
 
 	// データを一括取得
-	allData, err := d.batchGetSheetData(sheetNames)
+	allData, err := d.batchGetSheetData(ctx, sheetNames)
 	if err != nil {
 		return fmt.Errorf("failed to batch get sheet data: %w", err)
 	}
@@ -143,7 +144,7 @@ func (d *AdditionalSongsDownloader) Download() error {
 }
 
 // batchGetSheetData は複数のシートのデータを一括取得します
-func (d *AdditionalSongsDownloader) batchGetSheetData(sheetNames []string) (*batchGetResponse, error) {
+func (d *AdditionalSongsDownloader) batchGetSheetData(ctx context.Context, sheetNames []string) (*batchGetResponse, error) {
 	baseURL := fmt.Sprintf("%s/%s/values:batchGet", d.baseURL, d.sheetID)
 
 	// URLパラメータを構築
@@ -155,15 +156,19 @@ func (d *AdditionalSongsDownloader) batchGetSheetData(sheetNames []string) (*bat
 
 	reqURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 
-	resp, err := d.httpClient.Get(reqURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return nil, wrapRequestError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, httpStatusError{status: resp.StatusCode}
 	}
 
 	var batchResp batchGetResponse

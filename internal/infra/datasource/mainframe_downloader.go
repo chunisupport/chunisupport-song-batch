@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,7 +63,7 @@ func NewMainframeDownloader(outputDir, apiKey, sheetID, baseURL string) *Mainfra
 }
 
 // Download はGoogleスプレッドシートからデータをダウンロードし、JSONファイルとして保存します
-func (d *MainframeDownloader) Download() error {
+func (d *MainframeDownloader) Download(ctx context.Context) error {
 	if err := os.MkdirAll(d.outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
@@ -70,7 +71,7 @@ func (d *MainframeDownloader) Download() error {
 	slog.Info("Fetching mainframe data from Google Sheets", "sheetID", d.sheetID)
 
 	// Step 1: シート一覧を取得
-	sheetNames, err := d.getSheetNames()
+	sheetNames, err := d.getSheetNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get sheet names: %w", err)
 	}
@@ -78,7 +79,7 @@ func (d *MainframeDownloader) Download() error {
 	slog.Info("Retrieved sheet names", "count", len(sheetNames))
 
 	// Step 2: すべてのシートのデータを一括取得
-	allData, err := d.batchGetSheetData(sheetNames)
+	allData, err := d.batchGetSheetData(ctx, sheetNames)
 	if err != nil {
 		return fmt.Errorf("failed to batch get sheet data: %w", err)
 	}
@@ -107,19 +108,23 @@ func (d *MainframeDownloader) Download() error {
 }
 
 // getSheetNames はスプレッドシートからすべてのシート名を取得します
-func (d *MainframeDownloader) getSheetNames() ([]string, error) {
+func (d *MainframeDownloader) getSheetNames(ctx context.Context) ([]string, error) {
 	baseURL := fmt.Sprintf("%s/%s", d.baseURL, d.sheetID)
 	reqURL := fmt.Sprintf("%s?key=%s", baseURL, d.apiKey)
 
-	resp, err := d.httpClient.Get(reqURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return nil, wrapRequestError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, httpStatusError{status: resp.StatusCode}
 	}
 
 	var sheetsResp sheetsResponse
@@ -136,7 +141,7 @@ func (d *MainframeDownloader) getSheetNames() ([]string, error) {
 }
 
 // batchGetSheetData は複数のシートのデータを一括取得します
-func (d *MainframeDownloader) batchGetSheetData(sheetNames []string) (*batchGetResponse, error) {
+func (d *MainframeDownloader) batchGetSheetData(ctx context.Context, sheetNames []string) (*batchGetResponse, error) {
 	baseURL := fmt.Sprintf("%s/%s/values:batchGet", d.baseURL, d.sheetID)
 
 	// URLパラメータを構築
@@ -148,15 +153,19 @@ func (d *MainframeDownloader) batchGetSheetData(sheetNames []string) (*batchGetR
 
 	reqURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 
-	resp, err := d.httpClient.Get(reqURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return nil, wrapRequestError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, httpStatusError{status: resp.StatusCode}
 	}
 
 	var batchResp batchGetResponse

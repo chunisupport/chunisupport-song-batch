@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -21,6 +21,16 @@ type Datasource struct {
 	Type   string `json:"type"`
 	URL    string `json:"url"`
 	Params any    `json:"params"`
+}
+
+// DownloadResult はデータソース単位の取得結果です。
+type DownloadResult struct {
+	Type      string
+	Success   bool
+	Path      string
+	FetchedAt time.Time
+	Bytes     int64
+	Error     string
 }
 
 // Downloader はデータソースからファイルをダウンロードします
@@ -39,76 +49,77 @@ func NewDownloader(outputDir string) *Downloader {
 	}
 }
 
-// DownloadAll はすべてのデータソースをダウンロードします
-func (d *Downloader) DownloadAll(datasources []Datasource) error {
+// DownloadAll はすべてのデータソースをダウンロードし、ソース単位の結果を返します。
+// 一部失敗は全体 error にせず、失敗した要素の Success=false として表します。
+func (d *Downloader) DownloadAll(ctx context.Context, datasources []Datasource) ([]DownloadResult, error) {
 	if err := os.MkdirAll(d.outputDir, 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	results := make([]DownloadResult, len(datasources))
 	var g errgroup.Group
 	g.SetLimit(8)
-	var (
-		mu             sync.Mutex
-		downloadErrors []string
-		successCount   int
-		totalDownloads int
-	)
 
-	for _, ds := range datasources {
-		totalDownloads++
-
-		ds := ds // loop variable capture
+	for i, ds := range datasources {
 		g.Go(func() error {
 			slog.Info("Downloading datasource", "type", ds.Type, "url", ds.URL)
-
-			var err error
-			switch ds.Type {
-			case "mainframe":
-				err = d.downloadMainframe(ds)
-			case "additional_songs":
-				err = d.downloadAdditionalSongs(ds)
-			default:
-				err = d.downloadDatasource(ds)
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil {
-				slog.Error("Failed to download datasource", "type", ds.Type, "error", err)
-				downloadErrors = append(downloadErrors, fmt.Sprintf("%s: %v", ds.Type, err))
+			results[i] = d.downloadOne(ctx, ds)
+			if results[i].Success {
+				slog.Info("Successfully downloaded datasource",
+					"type", ds.Type,
+					"path", results[i].Path,
+					"fetched_at", results[i].FetchedAt.Format(time.RFC3339),
+					"bytes", results[i].Bytes)
 			} else {
-				slog.Info("Successfully downloaded datasource", "type", ds.Type)
-				successCount++
+				slog.Error("Failed to download datasource", "type", ds.Type, "error", results[i].Error)
 			}
-			// errgroupが即座に終了しないよう、常にnilを返す
 			return nil
 		})
 	}
 
-	// すべてのgoroutineが終了するのを待つ
-	// g.Go内の関数は常にnilを返すため、ここのエラーは常にnil
 	_ = g.Wait()
+	return results, nil
+}
 
-	if successCount == 0 && len(downloadErrors) > 0 {
-		return fmt.Errorf("all datasource downloads failed: %v", downloadErrors)
+func (d *Downloader) downloadOne(ctx context.Context, ds Datasource) DownloadResult {
+	result := DownloadResult{Type: ds.Type}
+	err := retryDownload(ctx, ds.Type, func() error {
+		switch ds.Type {
+		case "mainframe":
+			return d.downloadMainframe(ctx, ds)
+		case "additional_songs":
+			return d.downloadAdditionalSongs(ctx, ds)
+		default:
+			return d.downloadDatasource(ctx, ds)
+		}
+	})
+	if err != nil {
+		result.Error = err.Error()
+		return result
 	}
 
-	if len(downloadErrors) > 0 {
-		slog.Warn("Some datasource downloads failed", "failed", downloadErrors, "succeeded", successCount, "total", totalDownloads)
+	path := filepath.Join(d.outputDir, fmt.Sprintf("%s.json", ds.Type))
+	fileInfo, statErr := os.Stat(path)
+	if statErr != nil {
+		result.Error = fmt.Sprintf("downloaded file not found: %v", statErr)
+		return result
 	}
 
-	return nil
+	result.Success = true
+	result.Path = path
+	result.FetchedAt = time.Now()
+	result.Bytes = fileInfo.Size()
+	return result
 }
 
 // downloadDatasource は単一のデータソースをダウンロードします
-func (d *Downloader) downloadDatasource(ds Datasource) error {
+func (d *Downloader) downloadDatasource(ctx context.Context, ds Datasource) error {
 	finalURL, err := d.buildURL(ds.URL, ds.Params)
 	if err != nil {
 		return fmt.Errorf("failed to build URL: %w", err)
 	}
 
-	req, err := http.NewRequest("GET", finalURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", finalURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -117,12 +128,13 @@ func (d *Downloader) downloadDatasource(ds Datasource) error {
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute request: %w", err)
+		return wrapRequestError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d %s", resp.StatusCode, resp.Status)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return httpStatusError{status: resp.StatusCode}
 	}
 
 	data, err := io.ReadAll(resp.Body)
@@ -198,7 +210,7 @@ func (d *Downloader) buildURL(baseURL string, params any) (string, error) {
 }
 
 // downloadMainframe はmainframeデータソース(Googleスプレッドシート)から専用の方法でダウンロードします
-func (d *Downloader) downloadMainframe(ds Datasource) error {
+func (d *Downloader) downloadMainframe(ctx context.Context, ds Datasource) error {
 	// paramsからapiKeyとsheetIDを取得
 	paramsMap, ok := ds.Params.(map[string]string)
 	if !ok {
@@ -220,13 +232,14 @@ func (d *Downloader) downloadMainframe(ds Datasource) error {
 		return fmt.Errorf("baseURL not found in mainframe params")
 	}
 
-	// MainframeDownloaderを使用してダウンロード
-	mainframeDownloader := NewMainframeDownloader(d.outputDir, apiKey, sheetID, baseURL)
-	return mainframeDownloader.Download()
+	return withGoogleSheetsGate(ctx, func() error {
+		mainframeDownloader := NewMainframeDownloader(d.outputDir, apiKey, sheetID, baseURL)
+		return mainframeDownloader.Download(ctx)
+	})
 }
 
 // downloadAdditionalSongs はadditional_songsデータソース(Googleスプレッドシート)から専用の方法でダウンロードします
-func (d *Downloader) downloadAdditionalSongs(ds Datasource) error {
+func (d *Downloader) downloadAdditionalSongs(ctx context.Context, ds Datasource) error {
 	// paramsからapiKeyとsheetIDを取得
 	paramsMap, ok := ds.Params.(map[string]string)
 	if !ok {
@@ -248,7 +261,8 @@ func (d *Downloader) downloadAdditionalSongs(ds Datasource) error {
 		return fmt.Errorf("baseURL not found in additional_songs params")
 	}
 
-	// AdditionalSongsDownloaderを使用してダウンロード
-	additionalSongsDownloader := NewAdditionalSongsDownloader(d.outputDir, apiKey, sheetID, baseURL)
-	return additionalSongsDownloader.Download()
+	return withGoogleSheetsGate(ctx, func() error {
+		additionalSongsDownloader := NewAdditionalSongsDownloader(d.outputDir, apiKey, sheetID, baseURL)
+		return additionalSongsDownloader.Download(ctx)
+	})
 }
