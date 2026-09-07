@@ -3,7 +3,6 @@ name: Build and Upload Artifact
 on:
   push:
     branches:
-      - beta
       - develop
       - main
 
@@ -25,7 +24,7 @@ jobs:
       - name: Discord Notification (Build Start)
         if: always()
         env:
-          DISCORD_WEBHOOK_URL: ${{ github.ref_name == 'main' && secrets.DISCORD_WEBHOOK_URL_PRODUCTION || github.ref_name == 'beta' && secrets.DISCORD_WEBHOOK_URL_BETA || secrets.DISCORD_WEBHOOK_URL_STAGING }}
+          DISCORD_WEBHOOK_URL: ${{ github.ref_name == 'main' && secrets.DISCORD_WEBHOOK_URL_PRODUCTION || secrets.DISCORD_WEBHOOK_URL_STAGING }}
           DISCORD_NOTIFY_MODE: build-start
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
@@ -78,7 +77,7 @@ jobs:
       - name: Discord Notification (Build Complete)
         if: always()
         env:
-          DISCORD_WEBHOOK_URL: ${{ github.ref_name == 'main' && secrets.DISCORD_WEBHOOK_URL_PRODUCTION || github.ref_name == 'beta' && secrets.DISCORD_WEBHOOK_URL_BETA || secrets.DISCORD_WEBHOOK_URL_STAGING }}
+          DISCORD_WEBHOOK_URL: ${{ github.ref_name == 'main' && secrets.DISCORD_WEBHOOK_URL_PRODUCTION || secrets.DISCORD_WEBHOOK_URL_STAGING }}
           DISCORD_NOTIFY_MODE: build-complete
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
