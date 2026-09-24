@@ -243,6 +243,8 @@ func (c *OtogeDbConsolidator) bulkUpdateSongWikiPageTitles(ctx context.Context, 
 // extractWikiPageTitle は wikiwiki_url からベースURLを取り除き、Wikiのページタイトルを取り出します。
 // otoge-db の wikiwiki_url はパーセントエンコードの有無が楽曲ごとに混在しているため、
 // デコードしてタイトルの表記を統一します。デコードできない場合は元の文字列をそのまま使います。
+// デコード結果が不正なUTF-8になる場合（例: %FF）はMySQLへの書き込みでバッチ全体が失敗するため、
+// その楽曲のみ補完対象外とします。
 func extractWikiPageTitle(wikiwikiURL, wikiBaseURL string) (string, bool) {
 	title, found := strings.CutPrefix(strings.TrimSpace(wikiwikiURL), wikiBaseURL)
 	if !found {
@@ -250,6 +252,10 @@ func extractWikiPageTitle(wikiwikiURL, wikiBaseURL string) (string, bool) {
 	}
 
 	if decoded, err := url.PathUnescape(title); err == nil {
+		if !utf8.ValidString(decoded) {
+			slog.Warn("Decoded wiki page title is not valid UTF-8; skipping", "wikiwiki_url", wikiwikiURL)
+			return "", false
+		}
 		title = decoded
 	}
 

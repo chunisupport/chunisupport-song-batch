@@ -810,19 +810,27 @@ func buildBulkUpdateSongsSQL(n int) string {
 		sb.WriteString("\n\tEND")
 	}
 
-	writeReleasedAtBlock := func() {
-		sb.WriteString("\treleased_at = CASE\n")
+	// 既存値を優先し、MySQL側がNULLの場合のみ補完するブロック。
+	// 手動で修正した値がデータソースの値で上書きされ続けないようにするために使います。
+	writeKeepExistingBlock := func(column string) {
+		sb.WriteString("\t")
+		sb.WriteString(column)
+		sb.WriteString(" = CASE\n")
 		for range n {
-			sb.WriteString("\t\tWHEN id = ? THEN COALESCE(released_at, ?)\n")
+			sb.WriteString("\t\tWHEN id = ? THEN COALESCE(")
+			sb.WriteString(column)
+			sb.WriteString(", ?)\n")
 		}
-		sb.WriteString("\t\tELSE released_at\n\tEND")
+		sb.WriteString("\t\tELSE ")
+		sb.WriteString(column)
+		sb.WriteString("\n\tEND")
 	}
 
 	writeDisplayIDBlock()
 	sb.WriteString(",\n")
 	writeCoalesceBlock("title")
 	sb.WriteString(",\n")
-	writeCoalesceBlock("wiki_page_title")
+	writeKeepExistingBlock("wiki_page_title")
 	sb.WriteString(",\n")
 	writeDirectBlock("reading")
 	sb.WriteString(",\n")
@@ -832,7 +840,7 @@ func buildBulkUpdateSongsSQL(n int) string {
 	sb.WriteString(",\n")
 	writeCoalesceBlock("bpm")
 	sb.WriteString(",\n")
-	writeReleasedAtBlock()
+	writeKeepExistingBlock("released_at")
 	sb.WriteString(",\n")
 	writeCoalesceBlock("jacket")
 	sb.WriteString(",\n")

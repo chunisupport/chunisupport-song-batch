@@ -116,7 +116,7 @@ WHERE id IN (
 `))
 
 // bulkUpdateSongWikiPageTitlesTpl は wiki_page_title の一括更新用テンプレートです。
-// Wikiのページ名は改名され得るため、既存値の有無に関わらず最新のデータソースの値で上書きします。
+// 他のデータソースで設定済みの値を壊さないよう、未設定(nullまたは空文字)のレコードにのみ補完します。
 var bulkUpdateSongWikiPageTitlesTpl = template.Must(template.New("bulkUpdateSongWikiPageTitles").Funcs(template.FuncMap{
 	"sqlString": escapeSQLiteStringLiteral,
 }).Parse(`
@@ -130,7 +130,7 @@ WHERE id IN (
 	{{- range $i, $e := .}}
 	{{- if $i}},{{end}}{{.ID}}
 	{{- end -}}
-)
+) AND (wiki_page_title IS NULL OR wiki_page_title = '')
 `))
 
 var bulkUpdateWorldsendChartNotesTpl = template.Must(template.New("bulkUpdateWorldsendChartNotes").Parse(`

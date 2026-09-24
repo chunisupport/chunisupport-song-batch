@@ -155,7 +155,7 @@ func TestOtogeDbConsolidate_DoesNotOverwriteExistingWorldsEndData(t *testing.T) 
 	}
 }
 
-func TestOtogeDbConsolidate_UpdatesWikiPageTitle(t *testing.T) {
+func TestOtogeDbConsolidate_FillsOnlyMissingWikiPageTitle(t *testing.T) {
 	ctx := context.Background()
 	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
 		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
@@ -168,8 +168,9 @@ func TestOtogeDbConsolidate_UpdatesWikiPageTitle(t *testing.T) {
 	_, err = ws.DB().ExecContext(ctx, `
 		INSERT INTO songs (id, display_id, title, wiki_page_title, artist, genre_id, official_idx, is_worldsend, is_deleted)
 		VALUES
-			(1, 'song-1', 'Blow my mind', 'Old Title', 'Artist', 4, '100', 0, 0),
-			(2, 'song-2', 'Other Wiki', NULL, 'Artist', 4, '200', 0, 0)
+			(1, 'song-1', 'Blow my mind', NULL, 'Artist', 4, '100', 0, 0),
+			(2, 'song-2', 'Other Wiki', NULL, 'Artist', 4, '200', 0, 0),
+			(3, 'song-3', 'ALIVE', 'Existing Title', 'Artist', 4, '300', 0, 0)
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert songs: %v", err)
@@ -178,6 +179,7 @@ func TestOtogeDbConsolidate_UpdatesWikiPageTitle(t *testing.T) {
 	data := importer.OtogeDbData{
 		{ID: "100", Title: "Blow my mind", WikiwikiURL: "https://wikiwiki.jp/chunithmwiki/Blow%20my%20mind"},
 		{ID: "200", Title: "Other Wiki", WikiwikiURL: "https://example.com/Other Wiki"},
+		{ID: "300", Title: "ALIVE", WikiwikiURL: "https://wikiwiki.jp/chunithmwiki/ALIVE"},
 	}
 
 	consolidator := NewOtogeDbConsolidator(ws, &data, "https://wikiwiki.jp/chunithmwiki/")
@@ -194,6 +196,9 @@ func TestOtogeDbConsolidate_UpdatesWikiPageTitle(t *testing.T) {
 	}
 	if titles[1].Valid {
 		t.Errorf("expected wiki_page_title to remain NULL for non-matching base URL, got %v", titles[1].String)
+	}
+	if !titles[2].Valid || titles[2].String != "Existing Title" {
+		t.Errorf("expected wiki_page_title to remain Existing Title, got %v", titles[2])
 	}
 }
 
@@ -214,6 +219,7 @@ func TestExtractWikiPageTitle(t *testing.T) {
 		{name: "空文字列", url: "", wantOK: false},
 		{name: "ベースURLのみ", url: baseURL, wantOK: false},
 		{name: "ベースURLが異なる", url: "https://example.com/ALIVE", wantOK: false},
+		{name: "デコード結果が不正なUTF-8", url: baseURL + "ALIVE%FF", wantOK: false},
 	}
 
 	for _, tt := range tests {

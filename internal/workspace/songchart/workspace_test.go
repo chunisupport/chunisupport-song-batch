@@ -710,3 +710,47 @@ func TestBulkUpdateMySQLWorldsendCharts_PreservesExistingNotesDesigner(t *testin
 		t.Errorf("未設定の譜面製作者: got %q, want %q", got, want)
 	}
 }
+
+// TestBulkUpdateMySQLSongs_PreservesExistingWikiPageTitle は手動修正済みのWikiページタイトルが
+// データソースの値で上書きされず、未設定の楽曲にのみ補完されることを確認します。
+func TestBulkUpdateMySQLSongs_PreservesExistingWikiPageTitle(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ws, err := NewSongChartWorkspace(ctx, Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("ワークスペースの作成に失敗しました: %v", err)
+	}
+	defer ws.Close()
+
+	if _, err := ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, wiki_page_title, artist, genre_id, official_idx, is_worldsend, is_deleted)
+		VALUES
+			(1, 'existing', 'Existing', 'Manually Fixed', 'Artist', 1, '1', 0, 0),
+			(2, 'missing', 'Missing', NULL, 'Artist', 1, '2', 0, 0)
+	`); err != nil {
+		t.Fatalf("楽曲の準備に失敗しました: %v", err)
+	}
+
+	incoming := sql.NullString{String: "Incoming Title", Valid: true}
+	records := []songUpdateRecord{
+		{ID: 1, record: songInsertRecord{DisplayID: "existing", Title: "Existing", Artist: "Artist", OfficialIdx: "1", WikiPageTitle: incoming}},
+		{ID: 2, record: songInsertRecord{DisplayID: "missing", Title: "Missing", Artist: "Artist", OfficialIdx: "2", WikiPageTitle: incoming}},
+	}
+	if err := bulkUpdateMySQLSongs(ctx, ws.DB(), records, len(records)); err != nil {
+		t.Fatalf("楽曲の更新に失敗しました: %v", err)
+	}
+
+	var titles []sql.NullString
+	if err := ws.DB().SelectContext(ctx, &titles, `SELECT wiki_page_title FROM songs ORDER BY id`); err != nil {
+		t.Fatalf("Wikiページタイトルの取得に失敗しました: %v", err)
+	}
+	if got, want := titles[0].String, "Manually Fixed"; got != want {
+		t.Errorf("既存のWikiページタイトル: got %q, want %q", got, want)
+	}
+	if got, want := titles[1].String, "Incoming Title"; got != want {
+		t.Errorf("未設定のWikiページタイトル: got %q, want %q", got, want)
+	}
+}
