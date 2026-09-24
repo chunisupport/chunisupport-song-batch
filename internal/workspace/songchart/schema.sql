@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS songs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     display_id TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
+    wiki_page_title TEXT,
     reading TEXT,
     artist TEXT NOT NULL,
     genre_id INTEGER NOT NULL,

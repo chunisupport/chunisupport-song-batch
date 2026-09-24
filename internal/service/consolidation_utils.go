@@ -35,6 +35,12 @@ type SongBPMRecord struct {
 	BPM int `db:"bpm"`
 }
 
+// SongWikiPageTitleRecord は songs.wiki_page_title の一括更新に使用される内部レコードです。
+type SongWikiPageTitleRecord struct {
+	ID            int    `db:"id"`
+	WikiPageTitle string `db:"wiki_page_title"`
+}
+
 // WorldsendChartNotesRecord は worldsend_charts.notes の一括更新に使用される内部レコードです。
 type WorldsendChartNotesRecord struct {
 	SongID int `db:"song_id"`
@@ -107,6 +113,24 @@ WHERE id IN (
 	{{- if $i}},{{end}}{{.ID}}
 	{{- end -}}
 ) AND (bpm IS NULL OR bpm = 0)
+`))
+
+// bulkUpdateSongWikiPageTitlesTpl は wiki_page_title の一括更新用テンプレートです。
+// Wikiのページ名は改名され得るため、既存値の有無に関わらず最新のデータソースの値で上書きします。
+var bulkUpdateSongWikiPageTitlesTpl = template.Must(template.New("bulkUpdateSongWikiPageTitles").Funcs(template.FuncMap{
+	"sqlString": escapeSQLiteStringLiteral,
+}).Parse(`
+UPDATE songs SET wiki_page_title = CASE id
+	{{- range .}}
+	WHEN {{.ID}} THEN '{{sqlString .WikiPageTitle}}'
+	{{- end}}
+	ELSE wiki_page_title
+END
+WHERE id IN (
+	{{- range $i, $e := .}}
+	{{- if $i}},{{end}}{{.ID}}
+	{{- end -}}
+)
 `))
 
 var bulkUpdateWorldsendChartNotesTpl = template.Must(template.New("bulkUpdateWorldsendChartNotes").Parse(`
@@ -449,6 +473,50 @@ func BulkUpdateWorldsendChartNotesDesignerInBatches(ctx context.Context, db sqlx
 		affected, err := ExecuteBulkUpdateWorldsendChartNotesDesigner(ctx, db, batch)
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to execute bulk update worldsend chart notes_designer for batch range [%d:%d): %w", i, end, err)
+		}
+		totalAffected += affected
+	}
+
+	return totalAffected, nil
+}
+
+// ExecuteBulkUpdateSongWikiPageTitles は songs テーブルの wiki_page_title を1バッチ分まとめて更新します。
+func ExecuteBulkUpdateSongWikiPageTitles(ctx context.Context, db sqlx.ExtContext, records []SongWikiPageTitleRecord) (int64, error) {
+	var buf bytes.Buffer
+	if err := bulkUpdateSongWikiPageTitlesTpl.Execute(&buf, records); err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update song wiki_page_title template: %w", err)
+	}
+
+	result, err := db.ExecContext(ctx, buf.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute bulk update song wiki_page_title: %w", err)
+	}
+
+	return result.RowsAffected()
+}
+
+// BulkUpdateSongWikiPageTitlesInBatches は songs.wiki_page_title をバッチに分割して一括更新します。
+func BulkUpdateSongWikiPageTitlesInBatches(ctx context.Context, db sqlx.ExtContext, records []SongWikiPageTitleRecord) (int64, error) {
+	if len(records) == 0 {
+		return 0, nil
+	}
+
+	if info.SQLiteCompoundSelectLimit <= 0 {
+		return 0, fmt.Errorf("invalid SQLiteCompoundSelectLimit: %d", info.SQLiteCompoundSelectLimit)
+	}
+
+	var totalAffected int64
+	for i := 0; i < len(records); i += info.SQLiteCompoundSelectLimit {
+		if err := ctx.Err(); err != nil {
+			return totalAffected, err
+		}
+
+		end := min(i+info.SQLiteCompoundSelectLimit, len(records))
+		batch := records[i:end]
+
+		affected, err := ExecuteBulkUpdateSongWikiPageTitles(ctx, db, batch)
+		if err != nil {
+			return totalAffected, fmt.Errorf("failed to execute bulk update wiki_page_title for batch range [%d:%d): %w", i, end, err)
 		}
 		totalAffected += affected
 	}

@@ -107,6 +107,7 @@ func run() int {
 			repository.NewGenreRepository(database),
 			repository.NewCourseRepository(database),
 			cfg.PwPepper,
+			cfg.WikiBaseURL,
 		),
 		info.DatasourceCacheDir,
 	)

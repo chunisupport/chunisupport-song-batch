@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 )
 
 // Auth は認証関連の設定を定義します。
@@ -23,6 +25,9 @@ type Config struct {
 	PwPepper string   `json:"pw_pepper"`
 	Auth     Auth     `json:"auth"`
 	Database Database `json:"database"`
+	// WikiBaseURL はotoge-dbのwikiwiki_urlからページタイトルを取り出す際に除去するベースURLです。
+	// 未設定の場合はWikiページタイトルの補完をスキップします。
+	WikiBaseURL string `json:"wiki_base_url"`
 }
 
 // DbConfig はデータベース接続パラメータを定義します。
@@ -88,6 +93,9 @@ func LoadConfigFromEnv() (Config, error) {
 		return config, err
 	}
 	config.Database.DbConfig = dbConfig
+
+	// Wikiページタイトルは補完用途のため、未設定でもバッチ全体は止めない
+	config.WikiBaseURL = strings.TrimSpace(os.Getenv(info.ENV_WIKI_BASE_URL))
 
 	return config, nil
 }

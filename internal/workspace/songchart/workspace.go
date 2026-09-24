@@ -153,17 +153,18 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 
 		officialSeen[song.OfficialIdx] = struct{}{}
 		rec := songInsertRecord{
-			DisplayID:   song.DisplayID,
-			Title:       song.Title,
-			Reading:     song.Reading,
-			Artist:      song.Artist,
-			GenreID:     song.GenreID,
-			BPM:         song.BPM,
-			ReleasedAt:  releasedAt,
-			OfficialIdx: song.OfficialIdx,
-			Jacket:      song.Jacket,
-			IsWorldsend: song.IsWorldsend,
-			IsNew:       song.IsNew,
+			DisplayID:     song.DisplayID,
+			Title:         song.Title,
+			WikiPageTitle: song.WikiPageTitle,
+			Reading:       song.Reading,
+			Artist:        song.Artist,
+			GenreID:       song.GenreID,
+			BPM:           song.BPM,
+			ReleasedAt:    releasedAt,
+			OfficialIdx:   song.OfficialIdx,
+			Jacket:        song.Jacket,
+			IsWorldsend:   song.IsWorldsend,
+			IsNew:         song.IsNew,
 		}
 		if existing, exists := mysqlSongs[song.OfficialIdx]; exists {
 			songsToUpdate = append(songsToUpdate, songUpdateRecord{
@@ -291,19 +292,20 @@ func (w *SongChartWorkspace) SyncToMySQL(ctx context.Context, mysql domainrepo.D
 }
 
 type workspaceSong struct {
-	ID          int            `db:"id"`
-	DisplayID   string         `db:"display_id"`
-	Title       string         `db:"title"`
-	Reading     sql.NullString `db:"reading"`
-	Artist      string         `db:"artist"`
-	GenreID     sql.NullInt64  `db:"genre_id"`
-	BPM         sql.NullInt64  `db:"bpm"`
-	ReleasedAt  sql.NullString `db:"released_at"`
-	OfficialIdx string         `db:"official_idx"`
-	Jacket      sql.NullString `db:"jacket"`
-	IsWorldsend int            `db:"is_worldsend"`
-	IsNew       int            `db:"is_new"`
-	IsDeleted   int            `db:"is_deleted"`
+	ID            int            `db:"id"`
+	DisplayID     string         `db:"display_id"`
+	Title         string         `db:"title"`
+	WikiPageTitle sql.NullString `db:"wiki_page_title"`
+	Reading       sql.NullString `db:"reading"`
+	Artist        string         `db:"artist"`
+	GenreID       sql.NullInt64  `db:"genre_id"`
+	BPM           sql.NullInt64  `db:"bpm"`
+	ReleasedAt    sql.NullString `db:"released_at"`
+	OfficialIdx   string         `db:"official_idx"`
+	Jacket        sql.NullString `db:"jacket"`
+	IsWorldsend   int            `db:"is_worldsend"`
+	IsNew         int            `db:"is_new"`
+	IsDeleted     int            `db:"is_deleted"`
 }
 
 type workspaceChart struct {
@@ -747,17 +749,18 @@ func nullableString(value sql.NullString) any {
 }
 
 type songInsertRecord struct {
-	DisplayID   string
-	Title       string
-	Reading     sql.NullString
-	Artist      string
-	GenreID     sql.NullInt64
-	BPM         sql.NullInt64
-	ReleasedAt  sql.NullString
-	OfficialIdx string
-	Jacket      sql.NullString
-	IsWorldsend int
-	IsNew       int
+	DisplayID     string
+	Title         string
+	WikiPageTitle sql.NullString
+	Reading       sql.NullString
+	Artist        string
+	GenreID       sql.NullInt64
+	BPM           sql.NullInt64
+	ReleasedAt    sql.NullString
+	OfficialIdx   string
+	Jacket        sql.NullString
+	IsWorldsend   int
+	IsNew         int
 }
 
 type songUpdateRecord struct {
@@ -765,7 +768,7 @@ type songUpdateRecord struct {
 	record songInsertRecord
 }
 
-const songInsertColumnCount = 12
+const songInsertColumnCount = 13
 
 // buildBulkUpdateSongsSQL は楽曲バルク更新用の CASE 式を含む SQL 文を生成します。
 func buildBulkUpdateSongsSQL(n int) string {
@@ -819,6 +822,8 @@ func buildBulkUpdateSongsSQL(n int) string {
 	sb.WriteString(",\n")
 	writeCoalesceBlock("title")
 	sb.WriteString(",\n")
+	writeCoalesceBlock("wiki_page_title")
+	sb.WriteString(",\n")
 	writeDirectBlock("reading")
 	sb.WriteString(",\n")
 	writeCoalesceBlock("artist")
@@ -852,12 +857,12 @@ func buildBulkUpdateSongsSQL(n int) string {
 func buildBulkInsertSongsSQL(n int) string {
 	const queryPrefix = `
 INSERT INTO songs (
-	display_id, title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_new, is_deleted
+	display_id, title, wiki_page_title, reading, artist, genre_id, bpm, released_at, official_idx, jacket, is_worldsend, is_new, is_deleted
 ) VALUES `
 
 	values := make([]string, n)
 	for i := range n {
-		values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+		values[i] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 	}
 
 	return queryPrefix + strings.Join(values, ",")
@@ -881,6 +886,7 @@ func bulkInsertMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 			args = append(args,
 				rec.DisplayID,
 				rec.Title,
+				nullableString(rec.WikiPageTitle),
 				nullableString(rec.Reading),
 				rec.Artist,
 				nullableInt(rec.GenreID),
@@ -917,13 +923,16 @@ func bulkUpdateMySQLSongs(ctx context.Context, mysql domainrepo.DBExecutor, reco
 
 		chunk := records[start:end]
 		query := buildBulkUpdateSongsSQL(len(chunk))
-		args := make([]any, 0, len(chunk)*21)
+		args := make([]any, 0, len(chunk)*23)
 
 		for _, rec := range chunk {
 			args = append(args, rec.ID, rec.record.DisplayID)
 		}
 		for _, rec := range chunk {
 			args = append(args, rec.ID, rec.record.Title)
+		}
+		for _, rec := range chunk {
+			args = append(args, rec.ID, nullableString(rec.record.WikiPageTitle))
 		}
 		for _, rec := range chunk {
 			args = append(args, rec.ID, nullableString(rec.record.Reading))

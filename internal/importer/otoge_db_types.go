@@ -14,6 +14,7 @@ type OtogeDbSong struct {
 	WeStar        string `json:"we_star"`         // WORLD'S END星数
 	LevWENotes    string `json:"lev_we_notes"`    // WORLD'S END ノーツ数
 	LevWEDesigner string `json:"lev_we_designer"` // WORLD'S END 譜面製作者
+	WikiwikiURL   string `json:"wikiwiki_url"`    // CHUNITHM攻略wiki(wikiwiki)の楽曲ページURL
 }
 
 // OtogeDbData はotoge-dbデータソースの楽曲データのコレクションです

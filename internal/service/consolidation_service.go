@@ -33,6 +33,7 @@ type ConsolidationService struct {
 	genreRepo      domainrepo.GenreRepository
 	courseRepo     domainrepo.CourseRepository
 	pwPepper       string
+	wikiBaseURL    string
 	datasources    []string
 	opts           ConsolidationOptions
 	sources        ConsolidationSources
@@ -45,6 +46,7 @@ func NewConsolidationService(
 	genreRepo domainrepo.GenreRepository,
 	courseRepo domainrepo.CourseRepository,
 	pwPepper string,
+	wikiBaseURL string,
 	datasources []string,
 	opts ConsolidationOptions,
 	sources ConsolidationSources,
@@ -55,6 +57,7 @@ func NewConsolidationService(
 		genreRepo:      genreRepo,
 		courseRepo:     courseRepo,
 		pwPepper:       pwPepper,
+		wikiBaseURL:    wikiBaseURL,
 		datasources:    datasources,
 		opts:           opts,
 		sources:        sources,
@@ -215,7 +218,7 @@ func (s *ConsolidationService) consolidateSource(ctx context.Context, workspace 
 			slog.Warn("Skipping otoge-db consolidation due to missing data")
 			return nil
 		}
-		consolidator := NewOtogeDbConsolidator(workspace, s.sources.OtogeDb)
+		consolidator := NewOtogeDbConsolidator(workspace, s.sources.OtogeDb, s.wikiBaseURL)
 		return consolidator.Consolidate(ctx)
 	default:
 		slog.Warn("Unknown datasource requested for consolidation", "type", name)

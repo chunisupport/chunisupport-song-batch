@@ -46,6 +46,7 @@ func (oi *OtogeDbImporter) Import(filePath string) (*ImportResult, error) {
 		otogeDbData[i].Version = strings.TrimSpace(otogeDbData[i].Version)
 		otogeDbData[i].Catname = strings.TrimSpace(otogeDbData[i].Catname)
 		otogeDbData[i].Artist = strings.TrimSpace(otogeDbData[i].Artist)
+		otogeDbData[i].WikiwikiURL = strings.TrimSpace(otogeDbData[i].WikiwikiURL)
 	}
 
 	slog.Info("Successfully loaded otoge-db song data", "count", len(otogeDbData))

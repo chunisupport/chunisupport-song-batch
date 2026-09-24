@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
@@ -43,7 +44,7 @@ func TestOtogeDbConsolidate_ComplementsWorldsEndData(t *testing.T) {
 		},
 	}
 
-	consolidator := NewOtogeDbConsolidator(ws, &data)
+	consolidator := NewOtogeDbConsolidator(ws, &data, "")
 	if err := consolidator.Consolidate(ctx); err != nil {
 		t.Fatalf("Consolidate returned error: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestOtogeDbConsolidate_DoesNotOverwriteExistingWorldsEndData(t *testing.T) 
 		},
 	}
 
-	consolidator := NewOtogeDbConsolidator(ws, &data)
+	consolidator := NewOtogeDbConsolidator(ws, &data, "")
 	if err := consolidator.Consolidate(ctx); err != nil {
 		t.Fatalf("Consolidate returned error: %v", err)
 	}
@@ -151,5 +152,78 @@ func TestOtogeDbConsolidate_DoesNotOverwriteExistingWorldsEndData(t *testing.T) 
 	}
 	if releasedAt == nil || *releasedAt != "2022-10-01" {
 		t.Errorf("expected released_at to remain 2022-10-01, got %v", releasedAt)
+	}
+}
+
+func TestOtogeDbConsolidate_UpdatesWikiPageTitle(t *testing.T) {
+	ctx := context.Background()
+	ws, err := songchart.NewSongChartWorkspace(ctx, songchart.Config{
+		DSN: "file:" + t.Name() + "?mode=memory&cache=shared&_pragma=foreign_keys(ON)",
+	})
+	if err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	defer ws.Close()
+
+	_, err = ws.DB().ExecContext(ctx, `
+		INSERT INTO songs (id, display_id, title, wiki_page_title, artist, genre_id, official_idx, is_worldsend, is_deleted)
+		VALUES
+			(1, 'song-1', 'Blow my mind', 'Old Title', 'Artist', 4, '100', 0, 0),
+			(2, 'song-2', 'Other Wiki', NULL, 'Artist', 4, '200', 0, 0)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert songs: %v", err)
+	}
+
+	data := importer.OtogeDbData{
+		{ID: "100", Title: "Blow my mind", WikiwikiURL: "https://wikiwiki.jp/chunithmwiki/Blow%20my%20mind"},
+		{ID: "200", Title: "Other Wiki", WikiwikiURL: "https://example.com/Other Wiki"},
+	}
+
+	consolidator := NewOtogeDbConsolidator(ws, &data, "https://wikiwiki.jp/chunithmwiki/")
+	if err := consolidator.Consolidate(ctx); err != nil {
+		t.Fatalf("Consolidate returned error: %v", err)
+	}
+
+	var titles []sql.NullString
+	if err := ws.DB().SelectContext(ctx, &titles, `SELECT wiki_page_title FROM songs ORDER BY id`); err != nil {
+		t.Fatalf("failed to get wiki_page_title: %v", err)
+	}
+	if !titles[0].Valid || titles[0].String != "Blow my mind" {
+		t.Errorf("expected wiki_page_title=Blow my mind, got %v", titles[0])
+	}
+	if titles[1].Valid {
+		t.Errorf("expected wiki_page_title to remain NULL for non-matching base URL, got %v", titles[1].String)
+	}
+}
+
+func TestExtractWikiPageTitle(t *testing.T) {
+	t.Parallel()
+
+	const baseURL = "https://wikiwiki.jp/chunithmwiki/"
+	tests := []struct {
+		name   string
+		url    string
+		want   string
+		wantOK bool
+	}{
+		{name: "エンコードなし", url: baseURL + "可愛くてごめん", want: "可愛くてごめん", wantOK: true},
+		{name: "一部エンコード", url: baseURL + "トウキョウ・シャンディ・ランデヴ feat. 花譜%2C ツミキ", want: "トウキョウ・シャンディ・ランデヴ feat. 花譜, ツミキ", wantOK: true},
+		{name: "全体エンコード", url: baseURL + "%E3%83%88%E3%83%AA%E3%82%B9%E3%83%A1%E3%82%AE%E3%82%B9%E3%83%88%E3%82%B9(%E6%A5%BD%E6%9B%B2%E5%90%8D)", want: "トリスメギストス(楽曲名)", wantOK: true},
+		{name: "不正なエスケープは元の文字列を使う", url: baseURL + "100%", want: "100%", wantOK: true},
+		{name: "空文字列", url: "", wantOK: false},
+		{name: "ベースURLのみ", url: baseURL, wantOK: false},
+		{name: "ベースURLが異なる", url: "https://example.com/ALIVE", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ok := extractWikiPageTitle(tt.url, baseURL)
+			if ok != tt.wantOK || got != tt.want {
+				t.Errorf("extractWikiPageTitle(%q) = (%q, %v), want (%q, %v)", tt.url, got, ok, tt.want, tt.wantOK)
+			}
+		})
 	}
 }

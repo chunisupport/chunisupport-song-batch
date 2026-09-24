@@ -41,4 +41,6 @@ const (
 	ENV_ADDITIONAL_SONGS_SHEET_ID = envPrefix + "ADDITIONAL_SONGS_SHEET_ID"
 	// ENV_ST1027_URL はst1027データソースのURLを指す環境変数名です。
 	ENV_ST1027_URL = envPrefix + "ST1027_URL"
+	// ENV_WIKI_BASE_URL はwikiwiki_urlからページタイトルを取り出す際に除去するWikiのベースURLを指す環境変数名です。
+	ENV_WIKI_BASE_URL = envPrefix + "WIKI_BASE_URL"
 )

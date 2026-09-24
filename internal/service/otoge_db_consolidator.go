@@ -4,24 +4,32 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/importer"
 	"github.com/chunisupport/chunisupport-song-batch/internal/workspace/songchart"
 )
 
-// OtogeDbConsolidator は otoge-db 由来のリリース日を補完します。
+// maxWikiPageTitleLength は MySQL の songs.wiki_page_title (VARCHAR(300)) に格納できる最大文字数です。
+const maxWikiPageTitleLength = 300
+
+// OtogeDbConsolidator は otoge-db 由来のリリース日やWikiページタイトルなどを補完します。
 type OtogeDbConsolidator struct {
-	workspace *songchart.SongChartWorkspace
-	data      *importer.OtogeDbData
+	workspace   *songchart.SongChartWorkspace
+	data        *importer.OtogeDbData
+	wikiBaseURL string
 }
 
 // NewOtogeDbConsolidator は OtogeDbConsolidator の新しいインスタンスを作成します。
-func NewOtogeDbConsolidator(workspace *songchart.SongChartWorkspace, data *importer.OtogeDbData) *OtogeDbConsolidator {
+// wikiBaseURL が空の場合、Wikiページタイトルの補完は行いません。
+func NewOtogeDbConsolidator(workspace *songchart.SongChartWorkspace, data *importer.OtogeDbData, wikiBaseURL string) *OtogeDbConsolidator {
 	return &OtogeDbConsolidator{
-		workspace: workspace,
-		data:      data,
+		workspace:   workspace,
+		data:        data,
+		wikiBaseURL: wikiBaseURL,
 	}
 }
 
@@ -46,6 +54,9 @@ func (c *OtogeDbConsolidator) Consolidate(ctx context.Context) error {
 		return err
 	}
 	if err := c.bulkUpdateWorldsendChartNotesDesigner(ctx, idxMap); err != nil {
+		return err
+	}
+	if err := c.bulkUpdateSongWikiPageTitles(ctx, idxMap); err != nil {
 		return err
 	}
 
@@ -186,6 +197,67 @@ func (c *OtogeDbConsolidator) bulkUpdateWorldsendChartNotesDesigner(ctx context.
 
 	slog.Info("Otoge-db WORLD'S END chart notes_designer updated", "count", affected)
 	return nil
+}
+
+func (c *OtogeDbConsolidator) bulkUpdateSongWikiPageTitles(ctx context.Context, idxMap map[int]int) error {
+	if c.wikiBaseURL == "" {
+		slog.Warn("Wiki base URL is not configured; skipping wiki_page_title consolidation")
+		return nil
+	}
+
+	var records []SongWikiPageTitleRecord
+	for _, song := range *c.data {
+		songID, ok := c.extractSongID(song.ID, idxMap)
+		if !ok {
+			continue
+		}
+
+		wikiPageTitle, ok := extractWikiPageTitle(song.WikiwikiURL, c.wikiBaseURL)
+		if !ok {
+			continue
+		}
+		if utf8.RuneCountInString(wikiPageTitle) > maxWikiPageTitleLength {
+			slog.Warn("Otoge-db wiki page title is too long; skipping", "id", song.ID, "title", song.Title)
+			continue
+		}
+
+		records = append(records, SongWikiPageTitleRecord{
+			ID:            songID,
+			WikiPageTitle: wikiPageTitle,
+		})
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	affected, err := BulkUpdateSongWikiPageTitlesInBatches(ctx, c.workspace.DB(), records)
+	if err != nil {
+		return fmt.Errorf("failed to bulk update otoge-db song wiki_page_title: %w", err)
+	}
+
+	slog.Info("Otoge-db songs wiki_page_title updated", "count", affected)
+	return nil
+}
+
+// extractWikiPageTitle は wikiwiki_url からベースURLを取り除き、Wikiのページタイトルを取り出します。
+// otoge-db の wikiwiki_url はパーセントエンコードの有無が楽曲ごとに混在しているため、
+// デコードしてタイトルの表記を統一します。デコードできない場合は元の文字列をそのまま使います。
+func extractWikiPageTitle(wikiwikiURL, wikiBaseURL string) (string, bool) {
+	title, found := strings.CutPrefix(strings.TrimSpace(wikiwikiURL), wikiBaseURL)
+	if !found {
+		return "", false
+	}
+
+	if decoded, err := url.PathUnescape(title); err == nil {
+		title = decoded
+	}
+
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", false
+	}
+	return title, true
 }
 
 func (c *OtogeDbConsolidator) extractSongID(idStr string, idxMap map[int]int) (int, bool) {

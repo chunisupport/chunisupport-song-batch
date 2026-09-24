@@ -65,7 +65,8 @@ cp .env.example .env
 | `DB_PASS` | MySQL パスワード |
 | `CHUNISUPPORT_BATCH_OFFICIAL_URL` | 公式データソースのダウンロード URL |
 | `CHUNISUPPORT_BATCH_ST1027_URL` | st1027 データソースのダウンロード URL |
-| `CHUNISUPPORT_BATCH_OTOGE_DB_URL` | otoge-db データソースのダウンロード URL（リリース日、WORLD'S END の BPM・ノーツ数・譜面製作者補完用） |
+| `CHUNISUPPORT_BATCH_OTOGE_DB_URL` | otoge-db データソースのダウンロード URL（リリース日、WORLD'S END の BPM・ノーツ数・譜面製作者、Wiki ページタイトル補完用） |
+| `CHUNISUPPORT_BATCH_WIKI_BASE_URL` | otoge-db の `wikiwiki_url` から除去する Wiki のベース URL（例: `https://wikiwiki.jp/chunithmwiki/`）。残りをデコードして `songs.wiki_page_title` に保存します。未設定の場合は補完をスキップします |
 | `CHUNISUPPORT_BATCH_GOOGLE_CLOUD_API_KEY` | mainframe データソースの Google API キー |
 | `CHUNISUPPORT_BATCH_GOOGLE_SHEET_ID` | mainframe データソースのスプレッドシート ID |
 | `CHUNISUPPORT_BATCH_ADDITIONAL_SONGS_SHEET_ID` | additional_songs データソースのスプレッドシート ID |
