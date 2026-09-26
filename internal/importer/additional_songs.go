@@ -36,6 +36,9 @@ func (ai *AdditionalSongsImporter) Import(filePath string) (*ImportResult, error
 	if err := json.Unmarshal(data, &songsData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal additional_songs JSON: %w", err)
 	}
+	if songsData.Songs == nil || songsData.Charts == nil || songsData.WECharts == nil || songsData.Courses == nil {
+		return nil, fmt.Errorf("%w: additional_songs requires songs, charts, we_charts, and courses arrays", ErrValidation)
+	}
 
 	slog.Info("Additional songs data import completed",
 		"songs", len(songsData.Songs),

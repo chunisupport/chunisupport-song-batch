@@ -21,24 +21,22 @@ const (
 // RunRequest はユースケースへの入力です。flag 名や環境変数名は含みません。
 type RunRequest struct {
 	Mode                   RunMode
-	SkipDownload           bool
 	FillMissingReleaseDate bool
 }
 
 // LockConflictIsError はロック競合時にエラー終了すべきかを返します。
 func (r RunRequest) LockConflictIsError() bool {
-	return r.SkipDownload || r.Mode == RunModeMajorUpdate
+	return r.Mode == RunModeMajorUpdate
 }
 
 // NewRunRequest はフラグ値から実行リクエストを組み立てます。
-func NewRunRequest(majorUpdate, skipDownload, fillMissingReleaseDate bool) RunRequest {
+func NewRunRequest(majorUpdate, fillMissingReleaseDate bool) RunRequest {
 	mode := RunModeNormal
 	if majorUpdate {
 		mode = RunModeMajorUpdate
 	}
 	return RunRequest{
 		Mode:                   mode,
-		SkipDownload:           skipDownload,
 		FillMissingReleaseDate: fillMissingReleaseDate,
 	}
 }

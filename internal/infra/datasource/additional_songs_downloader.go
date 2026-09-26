@@ -264,7 +264,7 @@ func (d *AdditionalSongsDownloader) parseSongsSheet(values [][]string) ([]additi
 		return []additionalSongRow{}, nil
 	}
 
-	var songs []additionalSongRow
+	songs := make([]additionalSongRow, 0, len(values)-1)
 	// 最初の行はヘッダーなのでスキップ
 	for rowIdx, row := range values[1:] {
 		if len(row) == 0 {
@@ -337,7 +337,7 @@ func (d *AdditionalSongsDownloader) parseChartsSheet(values [][]string) ([]addit
 		return []additionalChartRow{}, nil
 	}
 
-	var charts []additionalChartRow
+	charts := make([]additionalChartRow, 0, len(values)-1)
 	// 最初の行はヘッダーなのでスキップ
 	for _, row := range values[1:] {
 		if len(row) == 0 {
@@ -372,7 +372,7 @@ func (d *AdditionalSongsDownloader) parseWEChartsSheet(values [][]string) ([]add
 		return []additionalWEChartRow{}, nil
 	}
 
-	var weCharts []additionalWEChartRow
+	weCharts := make([]additionalWEChartRow, 0, len(values)-1)
 	// 最初の行はヘッダーなのでスキップ
 	for rowIdx, row := range values[1:] {
 		if len(row) == 0 {

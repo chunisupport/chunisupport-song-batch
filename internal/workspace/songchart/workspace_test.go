@@ -469,6 +469,32 @@ func TestResolveChartUpdate(t *testing.T) {
 	}
 }
 
+func TestResolveChartUpdatePreservesComplementaryValuesWhileApplyingValidUpdate(t *testing.T) {
+	t.Parallel()
+
+	existing := mysqlChart{
+		Const:          14.0,
+		IsConstUnknown: true,
+		Notes:          sql.NullInt64{Int64: 700, Valid: true},
+		NotesDesigner:  sql.NullString{String: "Existing Designer", Valid: true},
+	}
+	incoming := workspaceChart{
+		Const:          14.2,
+		IsConstUnknown: false,
+	}
+
+	finalConst, finalUnknown, finalNotes, finalDesigner, action := resolveChartUpdate(existing, true, incoming, SyncOptions{})
+	if action != actionUpdate || finalConst != 14.2 || finalUnknown {
+		t.Fatalf("valid update was not applied: action=%v const=%v unknown=%v", action, finalConst, finalUnknown)
+	}
+	if !finalNotes.Valid || finalNotes.Int64 != 700 {
+		t.Fatalf("existing notes were not preserved: %+v", finalNotes)
+	}
+	if !finalDesigner.Valid || finalDesigner.String != "Existing Designer" {
+		t.Fatalf("existing notes designer was not preserved: %+v", finalDesigner)
+	}
+}
+
 // TestBuildBulkUpdateSongsSQL は生成 SQL の構造を確認します。
 func TestBuildBulkUpdateSongsSQL(t *testing.T) {
 	t.Parallel()

@@ -38,15 +38,6 @@ func isRequired(mode RunMode, sourceType string) bool {
 	return slices.Contains(requiredDatasourceTypes(mode), sourceType)
 }
 
-func allowsLastKnownGood(sourceType string) bool {
-	switch importer.DataSourceType(sourceType) {
-	case importer.DataSourceSt1027, importer.DataSourceOtogeDb:
-		return true
-	default:
-		return false
-	}
-}
-
 func assignSource(sources *service.ConsolidationSources, sourceType string, data any) error {
 	switch importer.DataSourceType(sourceType) {
 	case importer.DataSourceOfficial:

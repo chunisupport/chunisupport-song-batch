@@ -11,6 +11,7 @@ import (
 
 	"github.com/chunisupport/chunisupport-song-batch/internal/config"
 	"github.com/chunisupport/chunisupport-song-batch/internal/datasource/registry"
+	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 	"github.com/chunisupport/chunisupport-song-batch/internal/info"
 	"github.com/chunisupport/chunisupport-song-batch/internal/infra/datasource"
 	"github.com/chunisupport/chunisupport-song-batch/internal/infra/db"
@@ -49,7 +50,7 @@ func run() int {
 	slog.Info("Loaded environment variables", "env", env, "log_level", logLevel.String())
 
 	flags := config.NewBatchFlags()
-	req := usecase.NewRunRequest(flags.MajorUpdate, flags.SkipDownload, flags.FillMissingReleaseDate)
+	req := usecase.NewRunRequest(flags.MajorUpdate, flags.FillMissingReleaseDate)
 
 	cfg, err := config.LoadConfigFromEnv()
 	if err != nil {
@@ -105,11 +106,12 @@ func run() int {
 			repository.NewTransactionManager(database),
 			repository.NewDifficultyRepository(database),
 			repository.NewGenreRepository(database),
-			repository.NewCourseRepository(database),
+			func(executor domainrepo.ExtendedDBExecutor) domainrepo.CourseRepository {
+				return repository.NewCourseRepository(executor)
+			},
 			cfg.PwPepper,
 			cfg.WikiBaseURL,
 		),
-		info.DatasourceCacheDir,
 	)
 
 	if err := batchUsecase.Execute(ctx, req); err != nil {
@@ -117,7 +119,6 @@ func run() int {
 		return 1
 	}
 
-	slog.Info("Data Import Batch Completed Successfully")
 	return 0
 }
 

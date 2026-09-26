@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -47,6 +48,13 @@ func (oi *OtogeDbImporter) Import(filePath string) (*ImportResult, error) {
 		otogeDbData[i].Catname = strings.TrimSpace(otogeDbData[i].Catname)
 		otogeDbData[i].Artist = strings.TrimSpace(otogeDbData[i].Artist)
 		otogeDbData[i].WikiwikiURL = strings.TrimSpace(otogeDbData[i].WikiwikiURL)
+		id, err := strconv.Atoi(otogeDbData[i].ID)
+		if err != nil || id <= 0 || otogeDbData[i].Title == "" {
+			return nil, fmt.Errorf("%w: otoge_db row %d requires a positive numeric id and title", ErrValidation, i+1)
+		}
+	}
+	if len(otogeDbData) == 0 {
+		return nil, fmt.Errorf("%w: otoge_db must contain at least one song", ErrValidation)
 	}
 
 	slog.Info("Successfully loaded otoge-db song data", "count", len(otogeDbData))

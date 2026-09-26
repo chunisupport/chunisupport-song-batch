@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 // St1027Importer はst1027データソースによって生成されたデータをロードします
@@ -35,6 +36,14 @@ func (si *St1027Importer) Import(filePath string) (*ImportResult, error) {
 	var st1027Data St1027Data
 	if err := json.Unmarshal(data, &st1027Data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal st1027 JSON: %w", err)
+	}
+	if len(st1027Data.Songs) == 0 {
+		return nil, fmt.Errorf("%w: st1027 must contain at least one song", ErrValidation)
+	}
+	for i := range st1027Data.Songs {
+		if strings.TrimSpace(st1027Data.Songs[i].Meta.OfficialID) == "" {
+			return nil, fmt.Errorf("%w: st1027 row %d requires official_id", ErrValidation, i+1)
+		}
 	}
 
 	slog.Info("Successfully loaded st1027 music data", "count", len(st1027Data.Songs))

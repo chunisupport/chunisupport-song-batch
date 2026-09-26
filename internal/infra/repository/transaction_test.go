@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/chunisupport/chunisupport-song-batch/internal/domain/entity"
 	domainrepo "github.com/chunisupport/chunisupport-song-batch/internal/domain/repository"
 
 	"github.com/jmoiron/sqlx"
@@ -116,6 +117,51 @@ func TestTransactional_Rollback(t *testing.T) {
 
 	if count != 0 {
 		t.Errorf("expected 0 rows (rolled back), got %d", count)
+	}
+}
+
+func TestTransactional_CourseRepositoryFailureRollsBackEarlierWrites(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlx.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE markers (value TEXT NOT NULL);
+		CREATE TABLE course_classes (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+		CREATE TABLE courses (
+			display_id TEXT NOT NULL,
+			official_idx TEXT NOT NULL,
+			name TEXT NOT NULL,
+			course_class_id INTEGER NOT NULL,
+			is_deleted INTEGER NOT NULL
+		)
+	`); err != nil {
+		t.Fatalf("failed to create tables: %v", err)
+	}
+
+	course, err := entity.NewCourse("course-1", "Course", "unknown")
+	if err != nil {
+		t.Fatalf("NewCourse: %v", err)
+	}
+	err = NewTransactionManager(db).Transactional(ctx, func(tx domainrepo.ExtendedDBExecutor) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO markers (value) VALUES (?)`, "before-course-sync"); err != nil {
+			return err
+		}
+		return NewCourseRepository(tx).SaveAll(ctx, []entity.Course{course})
+	})
+	if err == nil {
+		t.Fatal("expected course repository failure")
+	}
+
+	var count int
+	if err := db.GetContext(ctx, &count, `SELECT COUNT(*) FROM markers`); err != nil {
+		t.Fatalf("failed to count markers: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("earlier writes were not rolled back: count=%d", count)
 	}
 }
 

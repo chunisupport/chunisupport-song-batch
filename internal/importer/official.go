@@ -54,6 +54,12 @@ func (oi *OfficialImporter) Import(filePath string) (*ImportResult, error) {
 		officialData[i].WeKanji = strings.TrimSpace(officialData[i].WeKanji)
 		officialData[i].WeStar = strings.TrimSpace(officialData[i].WeStar)
 		officialData[i].Image = strings.TrimSpace(officialData[i].Image)
+		if officialData[i].ID == "" || officialData[i].Title == "" {
+			return nil, fmt.Errorf("%w: official row %d requires id and title", ErrValidation, i+1)
+		}
+	}
+	if len(officialData) == 0 {
+		return nil, fmt.Errorf("%w: official must contain at least one song", ErrValidation)
 	}
 
 	// WORLD'S END楽曲と通常楽曲をカウント

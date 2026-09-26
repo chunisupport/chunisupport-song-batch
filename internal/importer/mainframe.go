@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 )
+
+var mainframeDifficulties = []string{"BAS", "ADV", "EXP", "MAS", "ULT"}
 
 // MainframeImporter はmainframeデータソースによって生成されたデータをロードします
 type MainframeImporter struct{}
@@ -43,6 +46,12 @@ func (mi *MainframeImporter) Import(filePath string) (*ImportResult, error) {
 		mainframeData[i].Title = strings.TrimSpace(mainframeData[i].Title)
 		mainframeData[i].Diff = strings.TrimSpace(mainframeData[i].Diff)
 		mainframeData[i].Genre = strings.TrimSpace(mainframeData[i].Genre)
+		if mainframeData[i].Title == "" || !slices.Contains(mainframeDifficulties, mainframeData[i].Diff) || mainframeData[i].Const <= 0 {
+			return nil, fmt.Errorf("%w: mainframe row %d requires title, supported difficulty, and positive const", ErrValidation, i+1)
+		}
+	}
+	if len(mainframeData) == 0 {
+		return nil, fmt.Errorf("%w: mainframe must contain at least one chart", ErrValidation)
 	}
 
 	slog.Info("Successfully loaded mainframe chart data", "count", len(mainframeData))

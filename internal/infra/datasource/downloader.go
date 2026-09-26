@@ -71,7 +71,7 @@ func (d *Downloader) DownloadAll(ctx context.Context, datasources []Datasource) 
 					"fetched_at", results[i].FetchedAt.Format(time.RFC3339),
 					"bytes", results[i].Bytes)
 			} else {
-				slog.Error("Failed to download datasource", "type", ds.Type, "error", results[i].Error)
+				slog.Debug("Datasource download attempt failed", "type", ds.Type, "error", results[i].Error)
 			}
 			return nil
 		})

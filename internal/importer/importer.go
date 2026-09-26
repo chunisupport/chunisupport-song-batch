@@ -1,5 +1,10 @@
 package importer
 
+import "errors"
+
+// ErrValidation によりユースケースは解析失敗と検証失敗を別の段階として記録できます。
+var ErrValidation = errors.New("datasource validation failed")
+
 // Importer はデータソースからデータをインポートするためのインターフェースです
 type Importer interface {
 	Import(filePath string) (*ImportResult, error)

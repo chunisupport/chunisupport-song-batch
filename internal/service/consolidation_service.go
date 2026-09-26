@@ -74,7 +74,7 @@ func (s *ConsolidationService) ConsolidateAll(ctx context.Context) error {
 		return nil
 	}
 	defer workspace.Close()
-	return s.syncWorkspace(ctx, workspace, s.db, true)
+	return s.syncWorkspace(ctx, workspace, s.db, s.courseRepo, true)
 }
 
 // ConsolidateBySource は指定されたデータソースのみを統合します。
@@ -98,7 +98,7 @@ func (s *ConsolidationService) ConsolidateBySource(ctx context.Context, sourceTy
 		return nil
 	}
 	defer workspace.Close()
-	return s.syncWorkspace(ctx, workspace, s.db, sourceType == "additional_songs")
+	return s.syncWorkspace(ctx, workspace, s.db, s.courseRepo, sourceType == "additional_songs")
 }
 
 // BuildWorkspace は対象データソースを SQLite ワークスペースに取り込みます。
@@ -107,11 +107,11 @@ func (s *ConsolidationService) BuildWorkspace(ctx context.Context) (*songchart.S
 }
 
 // SyncWorkspace は準備済みワークスペースを MySQL に同期します。
-func (s *ConsolidationService) SyncWorkspace(ctx context.Context, workspace *songchart.SongChartWorkspace, mysql domainrepo.DBExecutor) error {
-	return s.syncWorkspace(ctx, workspace, mysql, true)
+func (s *ConsolidationService) SyncWorkspace(ctx context.Context, workspace *songchart.SongChartWorkspace, mysql domainrepo.DBExecutor, courseRepo domainrepo.CourseRepository) error {
+	return s.syncWorkspace(ctx, workspace, mysql, courseRepo, true)
 }
 
-func (s *ConsolidationService) syncWorkspace(ctx context.Context, workspace *songchart.SongChartWorkspace, mysql domainrepo.DBExecutor, syncCourses bool) error {
+func (s *ConsolidationService) syncWorkspace(ctx context.Context, workspace *songchart.SongChartWorkspace, mysql domainrepo.DBExecutor, courseRepo domainrepo.CourseRepository, syncCourses bool) error {
 	if workspace == nil {
 		return nil
 	}
@@ -124,14 +124,14 @@ func (s *ConsolidationService) syncWorkspace(ctx context.Context, workspace *son
 		return fmt.Errorf("failed to sync workspace to MySQL: %w", err)
 	}
 	if syncCourses {
-		if err := s.syncCourses(ctx); err != nil {
+		if err := s.syncCourses(ctx, courseRepo); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *ConsolidationService) syncCourses(ctx context.Context) error {
+func (s *ConsolidationService) syncCourses(ctx context.Context, courseRepo domainrepo.CourseRepository) error {
 	if s.sources.AdditionalSongs == nil || len(s.sources.AdditionalSongs.Courses) == 0 {
 		return nil
 	}
@@ -144,7 +144,7 @@ func (s *ConsolidationService) syncCourses(ctx context.Context) error {
 		}
 		courses = append(courses, entityCourse)
 	}
-	if err := s.courseRepo.SaveAll(ctx, courses); err != nil {
+	if err := courseRepo.SaveAll(ctx, courses); err != nil {
 		return fmt.Errorf("failed to sync courses to MySQL: %w", err)
 	}
 	slog.Info("Synchronized courses to MySQL", "count", len(courses))

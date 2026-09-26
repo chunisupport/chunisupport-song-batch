@@ -1,9 +1,67 @@
 package datasource
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestAdditionalSongsParsersKeepEmptyResultsAsJSONArrays(t *testing.T) {
+	tests := []struct {
+		name      string
+		songRows  [][]string
+		chartRows [][]string
+		weRows    [][]string
+	}{
+		{
+			name:      "header only",
+			songRows:  [][]string{{"id", "title", "artist", "genre", "release"}},
+			chartRows: [][]string{{"id", "diff", "const"}},
+			weRows:    [][]string{{"id", "title", "artist", "genre", "release"}},
+		},
+		{
+			name:      "all data rows are skipped",
+			songRows:  [][]string{{"id", "title", "artist", "genre", "release"}, {"", "invalid"}},
+			chartRows: [][]string{{"id", "diff", "const"}, {"", "", ""}},
+			weRows:    [][]string{{"id", "title", "artist", "genre", "release"}, {"", "invalid"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &AdditionalSongsDownloader{}
+			songs, err := d.parseSongsSheet(tt.songRows)
+			if err != nil {
+				t.Fatalf("parseSongsSheet() error = %v", err)
+			}
+			charts, err := d.parseChartsSheet(tt.chartRows)
+			if err != nil {
+				t.Fatalf("parseChartsSheet() error = %v", err)
+			}
+			weCharts, err := d.parseWEChartsSheet(tt.weRows)
+			if err != nil {
+				t.Fatalf("parseWEChartsSheet() error = %v", err)
+			}
+			if songs == nil || charts == nil || weCharts == nil {
+				t.Fatalf("empty parser results must be non-nil: songs=%v charts=%v weCharts=%v", songs, charts, weCharts)
+			}
+
+			data, err := json.Marshal(additionalSongsSheetData{
+				Songs:    songs,
+				Charts:   charts,
+				WECharts: weCharts,
+				Courses:  []additionalCourseRow{},
+			})
+			if err != nil {
+				t.Fatalf("json.Marshal() error = %v", err)
+			}
+			const want = `{"songs":[],"charts":[],"we_charts":[],"courses":[]}`
+			if string(data) != want {
+				t.Fatalf("empty results JSON = %s, want %s", data, want)
+			}
+		})
+	}
+}
 
 func TestParseCoursesSheet(t *testing.T) {
 	d := &AdditionalSongsDownloader{}

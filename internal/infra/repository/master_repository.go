@@ -15,11 +15,11 @@ type difficultyRepositoryImpl struct {
 }
 
 type courseRepositoryImpl struct {
-	db DBorTx
+	db domainrepo.DBExecutor
 }
 
 // NewCourseRepository は CourseRepository の実装を生成します。
-func NewCourseRepository(db DBorTx) domainrepo.CourseRepository {
+func NewCourseRepository(db domainrepo.DBExecutor) domainrepo.CourseRepository {
 	return &courseRepositoryImpl{db: db}
 }
 

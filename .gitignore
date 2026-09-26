@@ -51,9 +51,6 @@ go.work
 !.env.example
 *.settings.json
 
-# Data
-.datasources/
-
 # Other
 *.db
 *.json
